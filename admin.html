@@ -580,30 +580,11 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
 
 </style>
 
-
-
-
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3n0jdg2rG8",
-  authDomain: "mundo-tienda-online.firebaseapp.com",
-  projectId: "mundo-tienda-online",
-  storageBucket: "mundo-tienda-online.firebasestorage.app",
-  messagingSenderId: "327509923535",
-  appId: "1:327509923535:web:3be8bcb1615368443309ba"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-console.log('✅ Firebase conectado');
-</script>
-
-
-<!-- Firebase SDK v9 compat -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
-  // Initialize Firebase AFTER SDK loads
-  var fbApp = firebase.initializeApp({
+(function(){
+  firebase.initializeApp({
     apiKey: "AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3n0jdg2rG8",
     authDomain: "mundo-tienda-online.firebaseapp.com",
     projectId: "mundo-tienda-online",
@@ -611,10 +592,10 @@ console.log('✅ Firebase conectado');
     messagingSenderId: "327509923535",
     appId: "1:327509923535:web:3be8bcb1615368443309ba"
   });
-  var db = firebase.firestore();
-  console.log('✅ Firebase + Firestore OK');
+  window.db = firebase.firestore();
+  console.log('✅ Firebase OK');
+})();
 </script>
-
 </head>
 <body>
 
@@ -1246,7 +1227,7 @@ const novedadesBase = [
   {name:'Control Universal TV RM-0148',cat:'Tecnología',price:3053,desc:'Control remoto universal para TV. Todas las marcas.'},
 ];
 
-window.products = []; let products = window.products;
+let products = [];
 let config = {wsp:'5491100000000',wspMsg:'Hola! Me interesa el producto',name:'Mundo Tienda Online',tagline:'Productos para tu vida'};
 let currentFilter = 'todos';
 let editingId = null;
@@ -1288,66 +1269,6 @@ function applyConfig(){
   document.getElementById('cfg-tagline').value         = config.tagline;
   document.title = config.name;
 }
-
-  catch(e){ console.error('fbDelete error:', e); }
-}
-
-
-/* ─── PIN ─── */
-let ADMIN_PIN = localStorage.getItem('mundoonline_pin') || '123456';
-let pinBuffer = '';
-let pinTarget = null;
-let _pinCallback = null;
-
-function requirePin(target, callback){
-  pinTarget = target; _pinCallback = callback || null; pinBuffer = '';
-  updatePinDots();
-  document.getElementById('pin-error').textContent = '';
-  document.getElementById('pin-overlay').style.display = 'flex';
-}
-function closePinOverlay(){
-  document.getElementById('pin-overlay').style.display = 'none';
-  pinBuffer = ''; pinTarget = null; _pinCallback = null;
-}
-function updatePinDots(){
-  for(var i=0;i<6;i++){
-    var d=document.getElementById('dot-'+i);
-    if(d){ d.style.background=i<pinBuffer.length?'#7B2FBE':'#F2EEF9';
-           d.style.borderColor=i<pinBuffer.length?'#7B2FBE':'#C9B8E8'; }
-  }
-}
-function pinKey(key){
-  var err=document.getElementById('pin-error');
-  if(key==='del'){ pinBuffer=pinBuffer.slice(0,-1); updatePinDots(); return; }
-  if(pinBuffer.length>=6) return;
-  pinBuffer+=key; updatePinDots();
-  if(pinBuffer.length===6){
-    if(pinBuffer===ADMIN_PIN){
-      var tgt=pinTarget, cb=_pinCallback; closePinOverlay();
-      if(cb) cb();
-      else if(tgt==='admin') _toggleAdmin();
-      else if(tgt==='config') openConfig();
-    } else {
-      err.textContent='❌ PIN incorrecto';
-      pinBuffer='';
-      setTimeout(function(){ updatePinDots(); err.textContent=''; }, 1200);
-    }
-  }
-}
-function cambiarPin(){
-  var actual=document.getElementById('cfg-pin-actual').value.trim();
-  var nuevo=document.getElementById('cfg-pin-nuevo').value.trim();
-  var conf=document.getElementById('cfg-pin-confirmar').value.trim();
-  if(actual!==ADMIN_PIN){ showToast('❌ PIN actual incorrecto'); return; }
-  if(!/^\d{6}$/.test(nuevo)){ showToast('⚠️ El PIN debe tener 6 números'); return; }
-  if(nuevo!==conf){ showToast('⚠️ Los PINs no coinciden'); return; }
-  ADMIN_PIN=nuevo; localStorage.setItem('mundoonline_pin',nuevo);
-  document.getElementById('cfg-pin-actual').value='';
-  document.getElementById('cfg-pin-nuevo').value='';
-  document.getElementById('cfg-pin-confirmar').value='';
-  showToast('✅ PIN cambiado correctamente');
-}
-
 function saveAll(){
   // Don't save proveedor base64 images to localStorage (too large ~3.5MB)
   // They are always re-applied from productImgs on load
@@ -1376,7 +1297,7 @@ document.addEventListener('click', function(e){
 
 function toggleAdmin_DISABLED(){
   adminMode = !adminMode;
-  const btn = document.getElementById('admin-toggle-btn'); if(!btn) return; if(!btn) return;
+  const btn = document.getElementById('admin-toggle-btn'); if(!btn) return;
   document.getElementById('admin-bar').classList.toggle('visible', adminMode);
   btn.textContent = adminMode ? '✅ Admin ON' : '✏️ Admin';
   document.getElementById('products-grid').parentElement.parentElement.classList.toggle('admin-active', adminMode);
@@ -1651,17 +1572,14 @@ function saveProduct(){
   const mainImg = imgs[0] || '';
   if(editingId){
     const i=products.findIndex(x=>x.id===editingId);
-    if(i>-1){
-      products[i]={...products[i],name,category,desc,price,badge};
+    if(i>-1){ products[i]={...products[i],name,category,desc,price,badge};
       if(mainImg) products[i].img=mainImg;
-      products[i].imgs = imgs;
-      if(typeof fbSave!=='undefined') fbSave(products[i]);
-    }
+      products[i].imgs = imgs; }
     showToast('✓ Producto actualizado');
   } else {
-    const newProd = {id:uid(),name,category,desc,price,badge,img:mainImg,imgs:imgs,fromProveedor:false};
-    products.unshift(newProd);
-    if(typeof fbSave!=='undefined') fbSave(newProd);
+    const np2={id:uid(),name,category,desc,price,badge,img:mainImg,imgs:imgs,fromProveedor:false};
+    products.unshift(np2);
+    fbSave(np2);
     showToast('✓ Producto agregado');
   }
   pendingImg.main=null;
@@ -1669,7 +1587,7 @@ function saveProduct(){
 }
 function deleteProduct(id){
   if(!confirm('¿Eliminar este producto?')) return;
-  if(typeof fbDelete!=='undefined') fbDelete(id);
+  fbDelete(id);
   products=products.filter(p=>p.id!==id);
   saveAll(); buildFilters(); renderProducts(); closeModal('modal-detail');
   showToast('🗑 Producto eliminado');
@@ -1683,7 +1601,7 @@ function consultWsp(id){
 }
 
 /* ─── CONFIG ─── */
-function openConfig(){ applyConfig(); document.getElementById('modal-config').classList.add('open'); }
+function openConfig_DISABLED(){ applyConfig(); document.getElementById('modal-config').classList.add('open'); }
 function saveConfig(){
   config.wsp    =document.getElementById('cfg-wsp').value.trim();
   config.wspMsg =document.getElementById('cfg-wsp-msg').value.trim()||'Hola! Me interesa el producto';
@@ -1712,81 +1630,428 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('load', init);
 
 
-// ── Firebase: escuchar productos en tiempo real ──
+/* ─── PIN DE SEGURIDAD ─── */
+let ADMIN_PIN = localStorage.getItem('mundoonline_pin') || '123456'; // ← Cambiá este PIN
+let pinBuffer = '';
+let pinTarget = null; // 'admin' or 'config'
 
+let _pinCallback = null;
+function requirePin(target, callback){
+  pinTarget = target;
+  _pinCallback = callback || null;
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-overlay').style.display = 'flex';
 }
-// Start after init loads products
-setTimeout(startFirebaseSync, 2000);
 
+function closePinOverlay(){
+  document.getElementById('pin-overlay').style.display = 'none';
+  pinBuffer = '';
+  pinTarget = null;
+}
+
+function updatePinDots(){
+  for(let i=0;i<6;i++){
+    const dot = document.getElementById('dot-'+i);
+    dot.classList.toggle('filled', i < pinBuffer.length);
+  }
+}
+
+function pinKey(key){
+  const errEl = document.getElementById('pin-error');
+  if(key === 'del'){
+    pinBuffer = pinBuffer.slice(0,-1);
+    updatePinDots();
+    return;
+  }
+  if(pinBuffer.length >= 6) return;
+  pinBuffer += key;
+  updatePinDots();
+  if(pinBuffer.length === 6){
+    if(pinBuffer === ADMIN_PIN){
+      const target = pinTarget;
+      const cb = _pinCallback;
+      closePinOverlay();
+      if(cb){ cb(); }
+      else if(target === 'admin')  _toggleAdmin();
+      else if(target === 'config') _openConfig();
+    } else {
+      errEl.textContent = '❌ PIN incorrecto. Intentá de nuevo.';
+      pinBuffer = '';
+      setTimeout(()=>{ updatePinDots(); errEl.textContent=''; }, 1200);
+    }
+  }
+}
+
+// Rename original functions and wrap with PIN
+
+function cambiarPin(){
+  const actual    = document.getElementById('cfg-pin-actual').value.trim();
+  const nuevo     = document.getElementById('cfg-pin-nuevo').value.trim();
+  const confirmar = document.getElementById('cfg-pin-confirmar').value.trim();
+
+  if(actual !== ADMIN_PIN){
+    showToast('❌ El PIN actual es incorrecto'); return;
+  }
+  if(!/^\d{6}$/.test(nuevo)){
+    showToast('⚠️ El PIN nuevo debe tener exactamente 6 números'); return;
+  }
+  if(nuevo !== confirmar){
+    showToast('⚠️ Los PINs nuevos no coinciden'); return;
+  }
+  ADMIN_PIN = nuevo;
+  localStorage.setItem('mundoonline_pin', nuevo);
+  document.getElementById('cfg-pin-actual').value = '';
+  document.getElementById('cfg-pin-nuevo').value = '';
+  document.getElementById('cfg-pin-confirmar').value = '';
+  showToast('✅ PIN cambiado correctamente');
+}
+
+function _toggleAdmin(){ 
+  adminMode = !adminMode;
+  const btn = document.getElementById('admin-toggle-btn'); if(!btn) return;
+  document.getElementById('admin-bar').classList.toggle('visible', adminMode);
+  btn.textContent = adminMode ? '✅ Admin ON' : '✏️ Admin';
+  document.getElementById('products-grid').parentElement.parentElement.classList.toggle('admin-active', adminMode);
+  renderProducts();
+}
+function _openConfig(){ applyConfig(); document.getElementById('modal-config').classList.add('open'); }
+
+/* ─── CART SYSTEM ─── */
+const CART_KEY = 'mundoonline_cart_v6';
+let cart = [];
+let discountPct = 0;
+
+function loadCart(){
+  try{ cart = JSON.parse(localStorage.getItem(CART_KEY)||'[]'); }catch(e){ cart=[]; }
+  updateCartBadge();
+}
+
+function saveCart(){ localStorage.setItem(CART_KEY, JSON.stringify(cart)); }
+
+function updateCartBadge(){
+  const total = cart.reduce((s,i)=>s+i.qty,0);
+  const badge = document.getElementById('cart-badge');
+  if(badge) badge.textContent = total;
+}
+
+
+
+
+/* ─── SWIPE Y GALERÍA ─── */
+let _touchStartX = 0;
+let _galleryImgs = [];
+let _galleryIdx  = 0;
+
+function touchStart(e){
+  _touchStartX = e.changedTouches[0].clientX;
+}
+function touchEnd(e){
+  if(!_galleryImgs.length) return;
+  const diff = _touchStartX - e.changedTouches[0].clientX;
+  if(Math.abs(diff) > 40){
+    galleryNav(diff > 0 ? 1 : -1);
+  }
+}
+function galleryNav(dir){
+  if(!_galleryImgs.length) return;
+  _galleryIdx = (_galleryIdx + dir + _galleryImgs.length) % _galleryImgs.length;
+  const src = _galleryImgs[_galleryIdx];
+  document.getElementById('d-img').src = src;
+  // Update active thumb
+  document.querySelectorAll('.detail-thumb').forEach((t,i)=>{
+    t.classList.toggle('active', i === _galleryIdx);
+  });
+}
+function initGallery(imgs){
+  _galleryImgs = imgs;
+  _galleryIdx  = 0;
+  const container = document.getElementById('d-img-container');
+  if(container){
+    container.classList.toggle('has-gallery', imgs.length > 1);
+  }
+}
+function switchDetailImg(src, thumb){
+  document.getElementById('d-img').src = src;
+  _galleryIdx = _galleryImgs.indexOf(src);
+  document.querySelectorAll('.detail-thumb').forEach(t=>t.classList.remove('active'));
+  if(thumb) thumb.classList.add('active');
+}
+
+/* ─── ZOOM EN DETALLE ─── */
+function zoomMove(e, wrap){
+  const img = wrap.querySelector('img');
+  const rect = wrap.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top)  / rect.height) * 100;
+  img.style.transformOrigin = x + '% ' + y + '%';
+  img.style.transform = 'scale(2.2)';
+}
+function zoomReset(wrap){
+  const img = wrap.querySelector('img');
+  img.style.transform = 'scale(1)';
+  img.style.transformOrigin = 'center center';
+}
+
+
+function addToCartFromDetail(){
+  const id = currentDetailId;
+  const p = products.find(x=>x.id===id); if(!p) return;
+  const qty = Math.max(1, parseInt(document.getElementById('detail-qty').value)||1);
+  const existing = cart.find(c=>c.id===id);
+  if(existing){ existing.qty += qty; }
+  else{ cart.push({id:p.id, name:p.name, price:p.price, qty:qty, img:p.img||''}); }
+  saveCart(); updateCartBadge();
+  showToast('✅ '+p.name.slice(0,30)+'... agregado al carrito');
+  closeModal('modal-detail');
+}
+
+function addToCart(id){
+  const p = products.find(x=>x.id===id); if(!p) return;
+  const qtyEl = document.getElementById('qty-'+id);
+  const qty = Math.max(1, parseInt(qtyEl ? qtyEl.value : 1)||1);
+  const existing = cart.find(c=>c.id===id);
+  if(existing){ existing.qty += qty; }
+  else{
+    cart.push({
+      id: p.id,
+      code: p.id.slice(0,8).toUpperCase(),
+      name: p.name,
+      price: p.price,
+      qty: qty,
+      img: p.img || ''
+    });
+  }
+  saveCart(); updateCartBadge();
+  showToast('✅ '+p.name.slice(0,30)+'... agregado al carrito');
+  if(qtyEl) qtyEl.value = 1;
+}
+
+function removeFromCart(id){
+  cart = cart.filter(c=>c.id!==id);
+  saveCart(); updateCartBadge(); renderCart();
+}
+
+function updateCartQty(id, val){
+  const qty = parseInt(val)||1;
+  const item = cart.find(c=>c.id===id);
+  if(item){ item.qty = Math.max(1, qty); }
+  saveCart(); renderCartTotals();
+}
+
+function applyDiscount(){
+  const val = parseFloat(document.getElementById('disc-input').value)||0;
+  discountPct = Math.max(0, Math.min(100, val));
+  renderCartTotals();
+}
+
+function getSubtotal(){ return cart.reduce((s,i)=>s+(i.price*i.qty),0); }
+function getDiscount(){ return Math.round(getSubtotal()*discountPct/100); }
+function getTotal(){ return getSubtotal()-getDiscount(); }
+
+function renderCart(){
+  const wrap = document.getElementById('cart-content');
+  if(!wrap) return;
+  if(!cart.length){
+    wrap.innerHTML = '<div class="cart-empty"><div class="icon">🛒</div><p>Tu carrito está vacío</p><p style="font-size:13px;margin-top:8px">Agregá productos con el botón <strong>Comprar</strong></p></div>';
+    return;
+  }
+  let rows = cart.map(item => {
+    const imp = item.price * item.qty;
+    const imgHtml = item.img ? `<img src="${item.img}" class="cart-img-thumb" alt="">` : '<div style="width:56px;height:56px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px">📦</div>';
+    return `<tr>
+      <td style="font-size:11px;color:var(--text3);font-weight:700">${esc(item.name.slice(0,6).toUpperCase())}</td>
+      <td style="font-weight:600;max-width:180px">${esc(item.name)}</td>
+      <td id="qty-cell-${item.id}" style="font-weight:700;text-align:center">${item.qty}</td>
+      <td>$${Number(item.price).toLocaleString('es-AR')}</td>
+      <td style="font-weight:700">$${Number(imp).toLocaleString('es-AR')}</td>
+      <td style="font-weight:700">$${Number(imp).toLocaleString('es-AR')}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-cart-del" onclick="removeFromCart('${item.id}')">Eliminar</button>
+        <button class="btn-cart-mod" style="margin-left:5px" onclick="modificarCantidad('${item.id}')">Modificar</button>
+      </td>
+      <td>${imgHtml}</td>
+    </tr>`;
+  }).join('');
+
+  // Build mobile card list
+  const mobileCards = cart.map(item => {
+    const imp = item.price * item.qty;
+    const imgHtml = item.img
+      ? `<img src="${item.img}" class="cart-item-card-img" alt="">`
+      : '<div class="cart-item-card-img-ph">📦</div>';
+    return `<div class="cart-item-card">
+      ${imgHtml}
+      <div class="cart-item-card-body">
+        <div class="cart-item-card-name">${esc(item.name)}</div>
+        <div class="cart-item-card-price">$${Number(imp).toLocaleString('es-AR')}</div>
+        <div class="cart-item-card-qty">
+          <label>Cantidad:</label>
+          <input type="number" class="cart-qty-input" value="${item.qty}" min="1"
+            onchange="updateCartQty('${item.id}',this.value)" style="width:56px">
+        </div>
+        <div class="cart-item-card-actions">
+          <button class="btn-cart-del" onclick="removeFromCart('${item.id}')">Eliminar</button>
+          <button class="btn-cart-mod" onclick="modificarCantidad('${item.id}')">Modificar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="cart-cards-mobile" style="display:none">${mobileCards}</div>
+    <div class="cart-table-wrap">
+      <table class="cart-table">
+        <thead><tr>
+          <th>Código</th><th>Detalle</th><th>Cantidad</th>
+          <th>Precio</th><th>Importe</th><th>Final</th>
+          <th></th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="cart-summary">
+      <div class="cart-summary-row">
+        <span class="label">Subtotal</span>
+        <span class="value" id="cart-subtotal">$${Number(getSubtotal()).toLocaleString('es-AR')}</span>
+      </div>
+      <div class="cart-summary-row">
+        <span class="label">Descuento otorgado</span>
+        <span class="discount-row">
+          <input type="number" id="disc-input" class="discount-input" placeholder="porcentaje" min="0" max="100" value="${discountPct||''}">
+          <button class="btn-apply-disc" onclick="applyDiscount()">Aplicar</button>
+          <strong id="cart-discount" style="color:var(--mint)">-$${Number(getDiscount()).toLocaleString('es-AR')}</strong>
+        </span>
+      </div>
+      <div class="cart-summary-row">
+        <span class="label">Total del pedido</span>
+        <span id="cart-total" style="font-weight:900;font-size:1.2rem;color:var(--violet)">$${Number(getTotal()).toLocaleString('es-AR')}</span>
+      </div>
+    </div>
+    <button class="btn-cerrar-compra" onclick="showView('checkout')">🏁 Cerrar la Compra</button>`;
+}
+
+function renderCartTotals(){
+  const sub = document.getElementById('cart-subtotal');
+  const disc = document.getElementById('cart-discount');
+  const tot = document.getElementById('cart-total');
+  if(sub) sub.textContent = '$'+Number(getSubtotal()).toLocaleString('es-AR');
+  if(disc) disc.textContent = '-$'+Number(getDiscount()).toLocaleString('es-AR');
+  if(tot) tot.textContent = '$'+Number(getTotal()).toLocaleString('es-AR');
+}
+
+function renderCheckoutSummary(){
+  const wrap = document.getElementById('checkout-summary');
+  if(!wrap) return;
+  let html = '<p>📦 Resumen del pedido</p>';
+  cart.forEach(item => {
+    html += `<div class="checkout-order-row"><span>${esc(item.name.slice(0,35))}${item.name.length>35?'...':''} x${item.qty}</span><span style="font-weight:700">$${Number(item.price*item.qty).toLocaleString('es-AR')}</span></div>`;
+  });
+  if(discountPct>0){
+    html += `<div class="checkout-order-row" style="color:var(--mint)"><span>Descuento ${discountPct}%</span><span>-$${Number(getDiscount()).toLocaleString('es-AR')}</span></div>`;
+  }
+  html += `<div class="checkout-order-row" style="font-weight:900;color:var(--violet);margin-top:6px;border-top:1px solid var(--border);padding-top:6px"><span>TOTAL</span><span>$${Number(getTotal()).toLocaleString('es-AR')}</span></div>`;
+  wrap.innerHTML = html;
+}
+
+function sendOrder(){
+  const nombre    = document.getElementById('co-nombre').value.trim();
+  const localidad = document.getElementById('co-localidad').value.trim();
+  const email     = document.getElementById('co-email').value.trim();
+  const wspCli    = document.getElementById('co-wsp').value.trim();
+  const obs       = document.getElementById('co-obs').value.trim();
+  const cliente   = document.getElementById('co-cliente').value.trim();
+  const entrega   = document.getElementById('co-entrega').value;
+
+  if(!nombre){ showToast('⚠️ Ingresá tu nombre'); return; }
+  if(!localidad){ showToast('⚠️ Ingresá tu localidad'); return; }
+  if(!wspCli){ showToast('⚠️ Ingresá tu WhatsApp'); return; }
+  if(!cart.length){ showToast('⚠️ Tu carrito está vacío'); return; }
+
+  let msg = `🛍️ *NUEVO PEDIDO — ${config.name}*\n\n`;
+  msg += `👤 *Cliente:* ${nombre}\n`;
+  msg += `📍 *Localidad:* ${localidad}\n`;
+  msg += `📱 *WhatsApp:* ${wspCli}\n`;
+  if(email) msg += `✉️ *Email:* ${email}\n`;
+  if(cliente) msg += `🔖 *N° Cliente:* ${cliente}\n`;
+  msg += `🚚 *Entrega:* ${entrega}\n`;
+  if(obs) msg += `📝 *Obs:* ${obs}\n`;
+  msg += `\n📦 *PRODUCTOS:*\n`;
+  cart.forEach(item => {
+    msg += `• ${item.name} x${item.qty} = $${Number(item.price*item.qty).toLocaleString('es-AR')}\n`;
+  });
+  msg += `\n💰 *Subtotal:* $${Number(getSubtotal()).toLocaleString('es-AR')}`;
+  if(discountPct>0) msg += `\n🏷️ *Descuento ${discountPct}%:* -$${Number(getDiscount()).toLocaleString('es-AR')}`;
+  msg += `\n✅ *TOTAL: $${Number(getTotal()).toLocaleString('es-AR')}*`;
+
+  const url = `https://wa.me/${config.wsp.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
+  window.open(url,'_blank');
+  showToast('✅ Pedido enviado por WhatsApp');
+}
+
+/* ─── VIEW SWITCHER ─── */
+
+function modificarCantidad(id){
+  const item = cart.find(c=>c.id===id);
+  if(!item) return;
+  const nueva = prompt('Ingresá la nueva cantidad para:\n' + item.name, item.qty);
+  if(nueva === null) return; // cancelled
+  const qty = parseInt(nueva);
+  if(!qty || qty < 1){ showToast('⚠️ Cantidad inválida'); return; }
+  item.qty = qty;
+  const cell = document.getElementById('qty-cell-'+id);
+  if(cell) cell.textContent = qty;
+  saveCart();
+  renderCart();
+  showToast('✅ Cantidad actualizada');
+}
+
+function showView(view){
+  const cartEl     = document.getElementById('view-cart');
+  const checkoutEl = document.getElementById('view-checkout');
+  if(cartEl)     cartEl.classList.toggle('active',     view==='cart');
+  if(checkoutEl) checkoutEl.classList.toggle('active', view==='checkout');
+  if(view==='cart')     { renderCart();             window.scrollTo(0,0); }
+  if(view==='checkout') { renderCheckoutSummary();  window.scrollTo(0,0); }
+  if(view==='store')    window.scrollTo(0,0);
+}
+
+
+
+window.addEventListener('load', init);
 </script>
 
-
-
-
-
-
 <script>
-// ── Firebase sync ──
-function startFirebaseSync(){
-  db.collection('products').onSnapshot(function(snap){
-    var fbProds = snap.docs.map(function(d){
-      return Object.assign({}, d.data(), {id: d.id});
-    });
-    var userProds = fbProds.filter(function(p){ return !p.fromProveedor; });
-    var novProds  = products.filter(function(p){ return p.fromProveedor; });
-    products.length = 0;
-    novProds.forEach(function(p){ products.push(p); });
-    userProds.forEach(function(p){ products.push(p); });
-    buildFilters();
-    renderProducts();
-    console.log('Firebase sync:', userProds.length, 'productos');
-  }, function(err){ console.error('Firestore error:', err.message); });
-}
-
-// fbSave
 function fbSave(product){
+  if(!window.db){ return; }
   var data = {
     name: product.name||'', category: product.category||'',
-    desc: product.desc||'', price: product.price||0,
+    desc: product.desc||'', price: Number(product.price)||0,
     badge: product.badge||'', img: product.img||'',
     imgs: product.imgs||[], fromProveedor: false
   };
-  console.log('Guardando en Firebase:', data.name);
-  db.collection('products').add(data)
-    .then(function(ref){
-      product.id = ref.id;
-      showToast('✅ Guardado en la nube');
-      console.log('Firebase guardado:', ref.id);
-    })
-    .catch(function(e){
-      showToast('⚠️ Error: ' + e.message);
-      console.error('fbSave error:', e);
-    });
+  window.db.collection('products').add(data)
+    .then(function(ref){ product.id=ref.id; showToast('✅ Guardado en la nube'); })
+    .catch(function(e){ showToast('⚠️ '+e.message); console.error(e); });
 }
-
 function fbDelete(id){
-  db.collection('products').doc(id).delete()
-    .catch(function(e){ console.error('fbDelete error:', e); });
+  if(window.db) window.db.collection('products').doc(id).delete();
 }
-
-// toggleAdminMenu
-function toggleAdminMenu(){
-  var d = document.getElementById('admin-dropdown');
-  if(d) d.classList.toggle('open');
+function startFirebaseSync(){
+  if(!window.db){ return; }
+  window.db.collection('products').onSnapshot(function(snap){
+    var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+    var up = fp.filter(function(p){ return !p.fromProveedor; });
+    var np = products.filter(function(p){ return p.fromProveedor; });
+    products.length=0;
+    np.forEach(function(p){products.push(p);});
+    up.forEach(function(p){products.push(p);});
+    buildFilters(); renderProducts();
+    console.log('🔄 Firebase sync:',up.length,'productos');
+  },function(e){ console.error('Sync error:',e.message); });
 }
-function closeAdminMenu(){
-  var d = document.getElementById('admin-dropdown');
-  if(d) d.classList.remove('open');
-}
-document.addEventListener('click', function(e){
-  var wrap = document.querySelector('.admin-menu-wrap');
-  if(wrap && !wrap.contains(e.target)) closeAdminMenu();
-});
-
-window.addEventListener('load', function(){
-  setTimeout(startFirebaseSync, 2000);
-});
+window.addEventListener('load',function(){ setTimeout(startFirebaseSync,2500); });
 </script>
-
 </body>
 </html>
