@@ -1310,9 +1310,21 @@ function init(){
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
 
   // Productos del proveedor desactivados — agregar manualmente desde el panel Admin
-  // Siempre re-aplicar imágenes del array (no se guardan en localStorage)
   products.filter(p=>p.fromProveedor).forEach((p,i)=>{ p.img = productImgs[i]||''; });
   loadCart(); applyConfig(); buildFilters(); renderProducts();
+
+  // Cargar config desde Firebase (sobreescribe localStorage si hay versión más nueva)
+  setTimeout(function(){
+    if(!window.db) return;
+    window.db.collection('config').doc('tienda').get()
+      .then(function(doc){
+        if(doc.exists){
+          config = {...config, ...doc.data()};
+          localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+          applyConfig();
+        }
+      }).catch(function(e){ console.warn('Config Firebase:', e.message); });
+  }, 800);
 }
 
 function applyConfig(){
@@ -1663,7 +1675,15 @@ function saveConfig(){
   config.name   =document.getElementById('cfg-name').value.trim()||'Mundo Tienda Online';
   config.tagline=document.getElementById('cfg-tagline').value.trim()||'Productos para tu vida';
   localStorage.setItem(CONFIG_KEY,JSON.stringify(config));
-  applyConfig(); closeModal('modal-config'); showToast('✓ Configuración guardada');
+  // Guardar en Firebase para sincronizar todos los dispositivos
+  if(window.db){
+    window.db.collection('config').doc('tienda').set(config)
+      .then(function(){ showToast('✓ Configuración guardada y sincronizada'); })
+      .catch(function(e){ showToast('✓ Guardado local (error nube: '+e.message+')'); });
+  } else {
+    showToast('✓ Configuración guardada');
+  }
+  applyConfig(); closeModal('modal-config');
 }
 
 /* ─── HELPERS ─── */

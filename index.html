@@ -2018,6 +2018,15 @@ function showView(view){
   }, function(e){
     console.error('Sync error:', e.message);
   });
+  // Cargar config (WhatsApp, nombre, etc.) desde Firebase
+  window.db.collection('config').doc('tienda').get()
+    .then(function(doc){
+      if(doc.exists){
+        config = {...config, ...doc.data()};
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+        console.log('✅ Config sincronizada — WP:', config.wsp);
+      }
+    }).catch(function(e){ console.warn('Config Firebase:', e.message); });
 }
 // Arrancar Firebase sync inmediatamente al cargar
 window.addEventListener('load', function(){
