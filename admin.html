@@ -1337,13 +1337,18 @@ function applyConfig(){
   document.title = config.name;
 }
 function saveAll(){
-  // Don't save proveedor base64 images to localStorage (too large ~3.5MB)
-  // They are always re-applied from productImgs on load
-  const toSave = products.map(p => {
-    if(p.fromProveedor){ const {img,...rest}=p; return rest; }
-    return p;
-  });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  // Solo guardar datos sin imágenes en localStorage (las imágenes van a Firebase)
+  // Esto evita el QuotaExceededError por imágenes base64 grandes
+  try {
+    const toSave = products.map(p => {
+      const {img, imgs, ...rest} = p; // excluir imágenes
+      return rest;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch(e) {
+    // Si localStorage falla, no es crítico — Firebase es la fuente de verdad
+    console.warn('localStorage lleno, usando solo Firebase:', e.message);
+  }
 }
 
 /* ─── ADMIN ─── */

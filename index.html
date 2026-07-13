@@ -2005,6 +2005,7 @@ function showView(view){
 
 
 
+function startFirebaseSync(){
   if(!window.db){ console.warn('Firebase no disponible'); return; }
   window.db.collection('products').onSnapshot(function(snap){
     var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
