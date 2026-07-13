@@ -649,7 +649,7 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
       <div class="admin-dropdown" id="admin-dropdown">
         <button class="admin-dropdown-btn" onclick="closeAdminMenu();requirePin('config')">⚙️ Configuración</button>
         <button class="admin-dropdown-btn" id="admin-toggle-btn" onclick="closeAdminMenu();(adminMode?_toggleAdmin():requirePin('admin'))">✏️ Admin</button>
-        <button class="admin-dropdown-btn add" onclick="closeAdminMenu();requirePin('admin',openAddModal)">＋ Agregar Producto</button>
+        <button class="admin-dropdown-btn add" id="btn-agregar-producto" style="display:none" onclick="closeAdminMenu();requirePin('admin',openAddModal)">＋ Agregar Producto</button>
       </div>
     </div>
   </nav>
@@ -687,7 +687,7 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
   <div class="search-row">
     <div class="search-box">
       <span>🔍</span>
-      <input type="text" placeholder="Buscar producto..." id="search-input" oninput="renderProducts()">
+      <input type="text" placeholder="Buscar producto..." id="search-input" autocomplete="off" oninput="renderProducts()">
     </div>
     <select class="sort-select" id="sort-select" onchange="renderProducts()">
       <option value="default">🔀 Orden</option>
@@ -1240,21 +1240,15 @@ let currentDetailId = null;
 function init(){
   const s = localStorage.getItem(STORAGE_KEY);
   if(s) try{ products = JSON.parse(s); }catch(e){}
-  // Always remove old proveedor products and rebuild with correct images
+  // Eliminar productos del proveedor (hardcodeados) — solo quedan los manuales
   products = products.filter(p => !p.fromProveedor);
+  saveAll();
   const c = localStorage.getItem(CONFIG_KEY);
   if(c) try{ config = {...config,...JSON.parse(c)}; }catch(e){}
   // Forzar nombre actualizado
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
 
-  if(true){
-    products = [...novedadesBase.map((p,i) => ({
-      id:uid(), name:p.name, category:p.cat,
-      desc:p.desc, price:p.price,
-      badge:'novedad', img: productImgs[i] || '', fromProveedor:true
-    })), ...products];
-    saveAll();
-  }
+  // Productos del proveedor desactivados — agregar manualmente desde el panel Admin
   // Siempre re-aplicar imágenes del array (no se guardan en localStorage)
   products.filter(p=>p.fromProveedor).forEach((p,i)=>{ p.img = productImgs[i]||''; });
   loadCart(); applyConfig(); buildFilters(); renderProducts();
@@ -1714,6 +1708,9 @@ function _toggleAdmin(){
   document.getElementById('admin-bar').classList.toggle('visible', adminMode);
   btn.textContent = adminMode ? '✅ Admin ON' : '✏️ Admin';
   document.getElementById('products-grid').parentElement.parentElement.classList.toggle('admin-active', adminMode);
+  // Mostrar/ocultar botón Agregar Producto según modo admin
+  const btnAgregar = document.getElementById('btn-agregar-producto');
+  if(btnAgregar) btnAgregar.style.display = adminMode ? '' : 'none';
   renderProducts();
 }
 function _openConfig(){ applyConfig(); document.getElementById('modal-config').classList.add('open'); }
