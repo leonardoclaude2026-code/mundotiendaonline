@@ -1289,6 +1289,7 @@ const novedadesBase = [
 ];
 
 let products = [];
+let firebaseReady = false;
 let config = {wsp:'5491100000000',wspMsg:'Hola! Me interesa el producto',name:'Mundo Tienda Online',tagline:'Productos para tu vida'};
 let currentFilter = 'todos';
 let editingId = null;
@@ -1416,7 +1417,9 @@ function renderProducts(){
   grid.parentElement.parentElement.classList.toggle('admin-active', adminMode);
 
   if(!list.length){
-    grid.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`;
+    grid.innerHTML = firebaseReady
+      ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`
+      : `<div class="empty-state"><div class="empty-icon">⏳</div><h3>Cargando productos...</h3><p>Conectando con Firebase</p></div>`;
     return;
   }
 
@@ -2173,6 +2176,7 @@ function startFirebaseSync(){
     var up = fp.filter(function(p){ return !p.fromProveedor; });
     products.length = 0;
     up.forEach(function(p){ products.push(p); });
+    firebaseReady = true;
     // Solo reconstruir filtros si cambió la cantidad de productos
     if(up.length !== _prevCount){ buildFilters(); _prevCount = up.length; }
     renderProducts();

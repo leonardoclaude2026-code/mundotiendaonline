@@ -676,7 +676,7 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
   <div class="search-row">
     <div class="search-box">
       <span>🔍</span>
-      <input type="text" placeholder="Buscar producto..." id="search-input" oninput="renderProducts()">
+      <input type="search" placeholder="Buscar producto..." id="search-input" autocomplete="off" oninput="renderProducts()">
     </div>
     <select class="sort-select" id="sort-select" onchange="renderProducts()">
       <option value="default">🔀 Orden</option>
@@ -1217,6 +1217,7 @@ const novedadesBase = [
 ];
 
 let products = [];
+let firebaseReady = false;
 let config = {wsp:'5491100000000',wspMsg:'Hola! Me interesa el producto',name:'Mundo Tienda Online',tagline:'Productos para tu vida'};
 let currentFilter = 'todos';
 let editingId = null;
@@ -1227,25 +1228,14 @@ let currentDetailId = null;
 
 /* ─── INIT ─── */
 function init(){
-  const s = localStorage.getItem(STORAGE_KEY);
-  if(s) try{ products = JSON.parse(s); }catch(e){}
-  // Always remove old proveedor products and rebuild with correct images
-  products = products.filter(p => !p.fromProveedor);
+  // No cargamos productos del localStorage — Firebase es la fuente de verdad
+  // (evita mostrar productos viejos/eliminados antes de que llegue el sync)
+  products = [];
   const c = localStorage.getItem(CONFIG_KEY);
   if(c) try{ config = {...config,...JSON.parse(c)}; }catch(e){}
   // Forzar nombre actualizado
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
 
-  if(true){
-    products = [...novedadesBase.map((p,i) => ({
-      id:uid(), name:p.name, category:p.cat,
-      desc:p.desc, price:p.price,
-      badge:'novedad', img: productImgs[i] || '', fromProveedor:true
-    })), ...products];
-    saveAll();
-  }
-  // Siempre re-aplicar imágenes del array (no se guardan en localStorage)
-  products.filter(p=>p.fromProveedor).forEach((p,i)=>{ p.img = productImgs[i]||''; });
   loadCart(); applyConfig(); buildFilters(); renderProducts();
 }
 
@@ -1337,7 +1327,9 @@ function renderProducts(){
   grid.parentElement.parentElement.classList.toggle('admin-active', adminMode);
 
   if(!list.length){
-    grid.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`;
+    grid.innerHTML = firebaseReady
+      ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`
+      : `<div class="empty-state"><div class="empty-icon">⏳</div><h3>Cargando productos...</h3><p>Conectando con Firebase</p></div>`;
     return;
   }
 
@@ -2011,11 +2003,18 @@ function startFirebaseSync(){
     var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
     // Solo productos manuales (no del proveedor)
     var up = fp.filter(function(p){ return !p.fromProveedor; });
-    // Reemplazar productos actuales con los de Firebase
+    // Reconstruir: primero los del proveedor (hardcoded), luego los de Firebase
+    var proveedorProds = novedadesBase.map(function(p,i){
+      return {id:'proveedor-'+i, name:p.name, category:p.cat,
+              desc:p.desc, price:p.price, badge:'novedad',
+              img: productImgs[i]||'', fromProveedor:true};
+    });
     products.length = 0;
+    proveedorProds.forEach(function(p){ products.push(p); });
     up.forEach(function(p){ products.push(p); });
+    firebaseReady = true;
     buildFilters(); renderProducts();
-    console.log('✅ Firebase sync:', up.length, 'productos');
+    console.log('✅ Firebase sync:', up.length, 'productos manuales +', proveedorProds.length, 'proveedor');
   }, function(e){
     console.error('Sync error:', e.message);
   });
@@ -2032,7 +2031,7 @@ function startFirebaseSync(){
 // Arrancar Firebase sync inmediatamente al cargar
 window.addEventListener('load', function(){
   // Pequeño delay para que Firebase termine de inicializar
-  setTimeout(startFirebaseSync, 800);
+  setTimeout(startFirebaseSync, 0);
 });
 </script>
 </body>
