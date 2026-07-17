@@ -695,7 +695,7 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
   <div class="search-row">
     <div class="search-box">
       <span>🔍</span>
-      <input type="search" placeholder="Buscar producto..." id="search-input" autocomplete="off" oninput="renderProducts()">
+      <input type="search" placeholder="Buscar producto..." id="search-input" autocomplete="new-password" oninput="renderProducts()">
     </div>
     <select class="sort-select" id="sort-select" onchange="renderProducts()">
       <option value="default">🔀 Orden</option>
@@ -2041,10 +2041,10 @@ function startFirebaseSync(){
       }
     }).catch(function(e){ console.warn('Config Firebase:', e.message); });
 }
-// Arrancar Firebase sync inmediatamente al cargar
 window.addEventListener('load', function(){
-  // Pequeño delay para que Firebase termine de inicializar
   setTimeout(startFirebaseSync, 0);
+  // Limpiar autofill del navegador en la barra de búsqueda
+  setTimeout(function(){ var s=document.getElementById('search-input'); if(s) s.value=''; }, 300);
 });
 </script>
 </body>

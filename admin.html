@@ -748,7 +748,7 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
   <div class="search-row">
     <div class="search-box">
       <span>🔍</span>
-      <input type="search" placeholder="Buscar producto..." id="search-input" name="buscar_producto_tienda" autocomplete="off" oninput="renderProducts()">
+      <input type="search" placeholder="Buscar producto..." id="search-input" name="buscar_producto_tienda" autocomplete="new-password" oninput="renderProducts()">
     </div>
     <select class="sort-select" id="sort-select" onchange="renderProducts()">
       <option value="default">🔀 Orden</option>
@@ -2186,7 +2186,11 @@ function startFirebaseSync(){
     setTimeout(startFirebaseSync, 2000); // reintenta en 2s si hay error
   });
 }
-window.addEventListener('load', function(){ setTimeout(startFirebaseSync, 0); });
+window.addEventListener('load', function(){
+  setTimeout(startFirebaseSync, 0);
+  // Limpiar autofill del navegador en la barra de búsqueda
+  setTimeout(function(){ var s=document.getElementById('search-input'); if(s) s.value=''; }, 300);
+});
 </script>
 </body>
 </html>
