@@ -34,6 +34,15 @@ body{background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-ser
 @keyframes gradShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,77,109,.35)}70%{box-shadow:0 0 0 10px rgba(255,77,109,0)}}
 @keyframes badgePop{0%{transform:scale(0) rotate(-20deg)}70%{transform:scale(1.12) rotate(4deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes shimmer{0%{background-position:-600px 0}100%{background-position:600px 0}}
+.skeleton-card{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.skeleton{background:linear-gradient(90deg,#ede9f5 25%,#ddd6ee 50%,#ede9f5 75%);background-size:600px 100%;animation:shimmer 1.4s ease-in-out infinite}
+.sk-img{height:220px;width:100%}
+.sk-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.sk-line{height:13px;border-radius:100px}
+.sk-line.s{width:38%}.sk-line.m{width:65%}.sk-line.l{width:90%}
+.sk-price{height:20px;width:40%;border-radius:100px}
+.sk-btn{height:42px;border-radius:100px;margin-top:4px}
 
 .bg-blobs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .blob{position:absolute;animation:blobMove 14s ease-in-out infinite,floatR 10s ease-in-out infinite}
@@ -1355,7 +1364,7 @@ function renderProducts(){
   if(!list.length){
     grid.innerHTML = firebaseReady
       ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`
-      : `<div class="empty-state"><div class="empty-icon">⏳</div><h3>CARGANDO PRODUCTOS</h3></div>`;
+      : Array(6).fill('').map(()=>`<div class="skeleton-card"><div class="skeleton sk-img"></div><div class="sk-body"><div class="skeleton sk-line s"></div><div class="skeleton sk-line m"></div><div class="skeleton sk-line l"></div><div class="skeleton sk-price"></div><div class="skeleton sk-btn"></div></div></div>`).join('');
     return;
   }
 
