@@ -105,7 +105,12 @@ nav{display:flex;gap:8px;align-items:center}
 .products-header{display:flex;justify-content:space-between;align-items:center;max-width:1200px;margin:0 auto 18px;flex-wrap:wrap;gap:8px}
 .products-count{font-size:13px;font-weight:700;color:var(--text3);background:var(--bg2);padding:5px 14px;border-radius:100px;border:1.5px solid var(--border)}
 .nov-label{background:linear-gradient(135deg,#E8FFF7,#E0F7FA);border:1.5px solid #06D6A0;color:#06D6A0;font-size:12px;font-weight:800;padding:5px 14px;border-radius:100px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:20px;max-width:1200px;margin:0 auto}
+.grid{display:grid;grid-template-columns:1fr;gap:12px;max-width:1200px;margin:0 auto}
+.card{display:flex;flex-direction:row;min-height:110px}
+.card-img-wrap{width:120px;min-width:120px;flex-shrink:0;aspect-ratio:unset;height:auto;align-self:stretch}
+.card-img{width:100%;height:100%;object-fit:cover}
+.card-body{flex:1;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between}
+.card-desc{-webkit-line-clamp:1}
 
 /* TARJETA */
 .card{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .3s cubic-bezier(.34,1.2,.64,1);cursor:pointer;position:relative;box-shadow:var(--shadow);animation:cardIn .5s ease both}
@@ -138,6 +143,9 @@ nav{display:flex;gap:8px;align-items:center}
 .badge-oferta{background:linear-gradient(135deg,var(--rose),#FF8C00);color:#fff}
 .badge-popular{background:linear-gradient(135deg,var(--amber),#FFD166);color:#fff}
 .badge-exclusivo{background:linear-gradient(135deg,var(--violet),var(--violet2));color:#fff}
+.badge-agotado{background:linear-gradient(135deg,#666,#333);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.card-price-old{font-size:11px;color:var(--text3);text-decoration:line-through;font-weight:600}
+.badge-oferta-hoy{display:inline-block;background:linear-gradient(135deg,#FF4D6D,#FF8C00);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:100px;letter-spacing:.05em;margin-top:4px;animation:pulse 2s ease infinite}
 
 .card-body{padding:16px;cursor:pointer}
 .card-category{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px;color:var(--violet)}
@@ -255,9 +263,10 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
   .controls,.products-section,.nov-banner{padding-left:.75rem;padding-right:.75rem}
   .url-row{flex-direction:column}
 
-  /* Grid 2 columnas en mobile */
-  .grid{grid-template-columns:repeat(2,1fr);gap:10px}
-  .card{border-radius:14px}
+  /* Grid 1 columna en mobile */
+  .grid{grid-template-columns:1fr;gap:8px}
+  .card{border-radius:14px;min-height:90px}
+  .card-img-wrap{width:90px;min-width:90px}
   .card-name{font-size:.82rem}
   .card-price strong{font-size:1rem}
 
@@ -1327,8 +1336,8 @@ function filterBy(cat, btn){
 }
 
 /* ─── RENDER ─── */
-const BADGE_CLS  = {nuevo:'badge-nuevo',novedad:'badge-novedad',oferta:'badge-oferta',popular:'badge-popular',exclusivo:'badge-exclusivo'};
-const BADGE_LBL  = {nuevo:'🆕 Nuevo',novedad:'✨ Novedad',oferta:'🔥 Oferta',popular:'⭐ Popular',exclusivo:'💎 Exclusivo'};
+const BADGE_CLS  = {nuevo:'badge-nuevo',novedad:'badge-novedad',oferta:'badge-oferta',popular:'badge-popular',exclusivo:'badge-exclusivo',agotado:'badge-agotado'};
+const BADGE_LBL  = {nuevo:'🆕 Nuevo',novedad:'✨ Novedad',oferta:'🔥 Oferta',popular:'⭐ Popular',exclusivo:'💎 Exclusivo',agotado:'😔 Agotado'};
 
 function renderProducts(){
   const q    = document.getElementById('search-input').value.toLowerCase();
@@ -1349,7 +1358,7 @@ function renderProducts(){
   if(!list.length){
     grid.innerHTML = firebaseReady
       ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`
-      : `<div class="empty-state"><div class="empty-icon">⏳</div><h3>Cargando productos...</h3><p>Conectando con Firebase</p></div>`;
+      : `<div class="empty-state"><div class="empty-icon">⏳</div><h3>CARGANDO PRODUCTOS</h3></div>`;
     return;
   }
 
@@ -1380,12 +1389,16 @@ function renderProducts(){
         <div class="card-footer">
           <div class="card-price">
             <small>Precio ARS</small>
+            ${p.oldprice?`<span class="card-price-old">$${Number(p.oldprice).toLocaleString('es-AR')}</span>`:''}
             <strong>$${Number(p.price).toLocaleString('es-AR')}</strong>
+            ${p.ofertaHoy?`<span class="badge-oferta-hoy">⏰ Oferta válida solo por hoy</span>`:''}
           </div>
         </div>
         <div class="qty-comprar-row" onclick="event.stopPropagation()">
-          <input type="number" id="qty-${p.id}" class="qty-input" value="1" min="1" max="999" onclick="event.stopPropagation()">
-          <button class="btn-comprar" onclick="event.stopPropagation();addToCart('${p.id}')">🛒 Comprar</button>
+          ${p.badge==='agotado'
+            ?`<button class="btn-comprar" disabled style="opacity:.45;cursor:not-allowed;flex:1">😔 Agotado</button>`
+            :`<input type="number" id="qty-${p.id}" class="qty-input" value="1" min="1" max="999" onclick="event.stopPropagation()">
+          <button class="btn-comprar" onclick="event.stopPropagation();addToCart('${p.id}')">🛒 Comprar</button>`}
         </div>
       </div>
     </div>`;
