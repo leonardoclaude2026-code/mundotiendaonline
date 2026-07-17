@@ -2003,18 +2003,11 @@ function startFirebaseSync(){
     var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
     // Solo productos manuales (no del proveedor)
     var up = fp.filter(function(p){ return !p.fromProveedor; });
-    // Reconstruir: primero los del proveedor (hardcoded), luego los de Firebase
-    var proveedorProds = novedadesBase.map(function(p,i){
-      return {id:'proveedor-'+i, name:p.name, category:p.cat,
-              desc:p.desc, price:p.price, badge:'novedad',
-              img: productImgs[i]||'', fromProveedor:true};
-    });
     products.length = 0;
-    proveedorProds.forEach(function(p){ products.push(p); });
     up.forEach(function(p){ products.push(p); });
     firebaseReady = true;
     buildFilters(); renderProducts();
-    console.log('✅ Firebase sync:', up.length, 'productos manuales +', proveedorProds.length, 'proveedor');
+    console.log('✅ Firebase sync:', up.length, 'productos');
   }, function(e){
     console.error('Sync error:', e.message);
   });
