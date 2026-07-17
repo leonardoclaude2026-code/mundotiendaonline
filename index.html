@@ -250,19 +250,38 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
   .hero h2{font-size:1.8rem}
   .hero p{font-size:.95rem}
   .hero-emoji{font-size:1.5rem}
-  .modal{padding:18px;border-radius:16px}
+  .modal{padding:18px;border-radius:16px;max-height:92vh;overflow-y:auto}
   .form-row{grid-template-columns:1fr}
   .controls,.products-section,.nov-banner{padding-left:.75rem;padding-right:.75rem}
   .url-row{flex-direction:column}
-  .grid{grid-template-columns:1fr;gap:12px}
-  .card-name{font-size:.9rem}
-  .card-price strong{font-size:1.1rem}
+
+  /* Grid 2 columnas en mobile */
+  .grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .card{border-radius:14px}
+  .card-name{font-size:.82rem}
+  .card-price strong{font-size:1rem}
+
+  /* Filtros con scroll horizontal */
+  .filters{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;gap:6px}
+  .filters::-webkit-scrollbar{display:none}
+
+  /* Search row apilado en mobile */
+  .search-row{flex-direction:column;gap:8px}
+  .sort-select{width:100%}
+
+  /* Inputs sin zoom en iOS */
+  input,select,textarea{font-size:16px !important}
+
   .btn-comprar{font-size:12px;padding:8px 10px}
   .qty-input{width:46px;font-size:13px}
   .btn-ver-compra{font-size:13px !important;padding:11px 22px !important}
   .detail-name{font-size:1.3rem}
   .detail-price{font-size:1.6rem}
   .checkout-form-group input,.checkout-form-group select,.checkout-form-group textarea{font-size:16px}
+
+  /* Admin dropdown en mobile */
+  .admin-dropdown{right:0;left:auto;min-width:190px}
+  .admin-dropdown-btn{font-size:14px;padding:11px 16px}
 }
 
 /* ── CARRITO ── */
@@ -1237,6 +1256,7 @@ function init(){
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
 
   loadCart(); applyConfig(); buildFilters(); renderProducts();
+  document.getElementById('search-input').value = '';
 }
 
 function applyConfig(){

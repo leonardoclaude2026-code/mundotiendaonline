@@ -1309,6 +1309,7 @@ function init(){
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
 
   loadCart(); applyConfig(); buildFilters(); renderProducts();
+  document.getElementById('search-input').value = '';
 
   // Cargar config desde Firebase (sobreescribe localStorage si hay versión más nueva)
   setTimeout(function(){
@@ -2169,7 +2170,7 @@ function fbDelete(id){
   if(window.db) window.db.collection('products').doc(id).delete();
 }
 function startFirebaseSync(){
-  if(!window.db){ return; }
+  if(!window.db){ setTimeout(startFirebaseSync, 500); return; }
   var _prevCount = -1;
   window.db.collection('products').onSnapshot(function(snap){
     var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
@@ -2177,11 +2178,13 @@ function startFirebaseSync(){
     products.length = 0;
     up.forEach(function(p){ products.push(p); });
     firebaseReady = true;
-    // Solo reconstruir filtros si cambió la cantidad de productos
     if(up.length !== _prevCount){ buildFilters(); _prevCount = up.length; }
     renderProducts();
     console.log('🔄 Firebase sync:', up.length, 'productos');
-  }, function(e){ console.error('Sync error:', e.message); });
+  }, function(e){
+    console.error('Sync error:', e.message);
+    setTimeout(startFirebaseSync, 2000); // reintenta en 2s si hay error
+  });
 }
 window.addEventListener('load', function(){ setTimeout(startFirebaseSync, 0); });
 </script>
