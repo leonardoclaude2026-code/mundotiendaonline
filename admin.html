@@ -106,14 +106,14 @@ nav{display:flex;gap:8px;align-items:center}
 .products-count{font-size:13px;font-weight:700;color:var(--text3);background:var(--bg2);padding:5px 14px;border-radius:100px;border:1.5px solid var(--border)}
 .nov-label{background:linear-gradient(135deg,#E8FFF7,#E0F7FA);border:1.5px solid #06D6A0;color:#06D6A0;font-size:12px;font-weight:800;padding:5px 14px;border-radius:100px}
 .grid{display:grid;grid-template-columns:1fr;gap:12px;max-width:1200px;margin:0 auto}
-.card-body{flex:1;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between}
+.card-body{padding:14px 16px}
 .card-desc{-webkit-line-clamp:1}
 
 /* TARJETA */
-.card{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .3s cubic-bezier(.34,1.2,.64,1);cursor:pointer;position:relative;box-shadow:var(--shadow);animation:cardIn .5s ease both;display:flex;flex-direction:row;min-height:110px}
+.card{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .3s cubic-bezier(.34,1.2,.64,1);cursor:pointer;position:relative;box-shadow:var(--shadow);animation:cardIn .5s ease both}
 .card:hover{border-color:var(--border2);transform:translateY(-6px) scale(1.01);box-shadow:var(--shadow2)}
 .card:hover .card-img{transform:scale(1.01)}
-.card-img-wrap{overflow:hidden;width:130px;min-width:130px;flex-shrink:0;aspect-ratio:unset;align-self:stretch;position:relative;background:var(--bg3);cursor:pointer}
+.card-img-wrap{overflow:hidden;width:100%;height:220px;position:relative;background:var(--bg3);cursor:pointer}
 .card-img{width:100%;height:100%;object-fit:contain;display:block;transition:transform .4s ease}
 .card-img-placeholder{width:100%;height:100%;background:linear-gradient(135deg,var(--bg3),var(--violet-bg));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
 .card-img-placeholder span{font-size:12px;color:var(--text3);font-weight:600}
@@ -556,9 +556,8 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
 
   /* Grid productos — 1 columna en mobile */
   .grid{ grid-template-columns:1fr !important; gap:8px; }
-  .card{ border-radius:14px; min-height:110px; }
-  .card-img-wrap{ width:110px; min-width:110px; }
-  .card-img{ object-fit:contain; background:var(--bg3); }
+  .card{ border-radius:14px; }
+  .card-img-wrap{ height:180px; }
   .card-name{ font-size:.82rem; }
   .card-price strong{ font-size:1rem; }
   .btn-comprar{ font-size:11px; padding:7px 8px; }
