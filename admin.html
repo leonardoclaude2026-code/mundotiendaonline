@@ -1299,18 +1299,14 @@ let currentDetailId = null;
 
 /* ─── INIT ─── */
 function init(){
-  const s = localStorage.getItem(STORAGE_KEY);
-  if(s) try{ products = JSON.parse(s); }catch(e){}
-  // Eliminar productos del proveedor (hardcodeados) — solo quedan los manuales
-  products = products.filter(p => !p.fromProveedor);
-  saveAll();
+  // No cargamos productos del localStorage — Firebase es la fuente de verdad
+  // (evita mostrar productos viejos/eliminados antes de que llegue el sync)
+  products = [];
   const c = localStorage.getItem(CONFIG_KEY);
   if(c) try{ config = {...config,...JSON.parse(c)}; }catch(e){}
   // Forzar nombre actualizado
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
 
-  // Productos del proveedor desactivados — agregar manualmente desde el panel Admin
-  products.filter(p=>p.fromProveedor).forEach((p,i)=>{ p.img = productImgs[i]||''; });
   loadCart(); applyConfig(); buildFilters(); renderProducts();
 
   // Cargar config desde Firebase (sobreescribe localStorage si hay versión más nueva)
