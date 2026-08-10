@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -2232,22 +2232,34 @@ function doUpdate(product, imgC, imgsC){
 function fbDelete(id){
   if(window.db) window.db.collection('products').doc(id).delete();
 }
+function _applySnapAdmin(snap){
+  var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+  var up = fp.filter(function(p){ return !p.fromProveedor; });
+  products.length = 0;
+  up.forEach(function(p){ products.push(p); });
+  firebaseReady = true;
+  buildFilters();
+  renderProducts();
+  console.log('Firebase admin sync:', up.length, 'productos');
+}
 function startFirebaseSync(){
   if(!window.db){ setTimeout(startFirebaseSync, 500); return; }
-  var _prevCount = -1;
-  window.db.collection('products').onSnapshot(function(snap){
-    var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
-    var up = fp.filter(function(p){ return !p.fromProveedor; });
-    products.length = 0;
-    up.forEach(function(p){ products.push(p); });
-    firebaseReady = true;
-    if(up.length !== _prevCount){ buildFilters(); _prevCount = up.length; }
-    renderProducts();
-    console.log('🔄 Firebase sync:', up.length, 'productos');
-  }, function(e){
-    console.error('Sync error:', e.message);
-    setTimeout(startFirebaseSync, 2000); // reintenta en 2s si hay error
-  });
+  // Lectura server-first
+  window.db.collection('products').get({source:'server'})
+    .then(function(snap){ _applySnapAdmin(snap); })
+    .catch(function(e){
+      console.warn('Server fetch error, reintentando en 3s:', e.message);
+      setTimeout(startFirebaseSync, 3000);
+    });
+  // Listener tiempo real
+  window.db.collection('products').onSnapshot(
+    {includeMetadataChanges:false},
+    function(snap){ if(!snap.metadata.fromCache){ _applySnapAdmin(snap); } },
+    function(e){
+      console.error('Sync error:', e.message);
+      setTimeout(startFirebaseSync, 3000);
+    }
+  );
 }
 window.addEventListener('load', function(){
   setTimeout(startFirebaseSync, 0);

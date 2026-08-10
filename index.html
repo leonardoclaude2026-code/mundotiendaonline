@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -2038,27 +2038,37 @@ function showView(view){
 
 
 
+function _applySnap(snap){
+  var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+  var up = fp.filter(function(p){ return !p.fromProveedor; });
+  products.length = 0;
+  up.forEach(function(p){ products.push(p); });
+  firebaseReady = true;
+  buildFilters(); renderProducts();
+  console.log('Firebase sync:', up.length, 'productos');
+}
 function startFirebaseSync(){
   if(!window.db){ console.warn('Firebase no disponible'); return; }
-  window.db.collection('products').onSnapshot(function(snap){
-    var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
-    // Solo productos manuales (no del proveedor)
-    var up = fp.filter(function(p){ return !p.fromProveedor; });
-    products.length = 0;
-    up.forEach(function(p){ products.push(p); });
-    firebaseReady = true;
-    buildFilters(); renderProducts();
-    console.log('✅ Firebase sync:', up.length, 'productos');
-  }, function(e){
-    console.error('Sync error:', e.message);
-  });
-  // Cargar config (WhatsApp, nombre, etc.) desde Firebase
-  window.db.collection('config').doc('tienda').get()
+  // Lectura server-first (evita cache vacio offline)
+  window.db.collection('products').get({source:'server'})
+    .then(function(snap){ _applySnap(snap); })
+    .catch(function(e){
+      console.warn('Server fetch error, reintentando en 3s:', e.message);
+      setTimeout(startFirebaseSync, 3000);
+    });
+  // Listener tiempo real - solo actualizaciones desde servidor
+  window.db.collection('products').onSnapshot(
+    {includeMetadataChanges:false},
+    function(snap){ if(!snap.metadata.fromCache){ _applySnap(snap); } },
+    function(e){ console.warn('onSnapshot error:', e.message); }
+  );
+  // Config
+  window.db.collection('config').doc('tienda').get({source:'server'})
     .then(function(doc){
       if(doc.exists){
-        config = {...config, ...doc.data()};
+        config = Object.assign({}, config, doc.data());
         localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-        console.log('✅ Config sincronizada — WP:', config.wsp);
+        console.log('Config sincronizada — WP:', config.wsp);
       }
     }).catch(function(e){ console.warn('Config Firebase:', e.message); });
 }
