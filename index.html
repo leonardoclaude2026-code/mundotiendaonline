@@ -1016,6 +1016,9 @@ footer strong{background:linear-gradient(135deg,var(--rose),var(--violet2));-web
 <script>
 const STORAGE_KEY = 'mundoonline_v6';
 const CONFIG_KEY  = 'mundoonline_cfg_v6';
+const PRODUCTS_CACHE_KEY = 'mundoonline_pc_v1';
+let   _swrList = [];
+let   _visibleCount = 20;
 
 
 const productImgs = [
@@ -1264,13 +1267,17 @@ let currentDetailId = null;
 
 /* ─── INIT ─── */
 function init(){
-  // No cargamos productos del localStorage — Firebase es la fuente de verdad
-  // (evita mostrar productos viejos/eliminados antes de que llegue el sync)
   products = [];
   const c = localStorage.getItem(CONFIG_KEY);
   if(c) try{ config = {...config,...JSON.parse(c)}; }catch(e){}
-  // Forzar nombre actualizado
   if(config.name === 'Mundo Online') config.name = 'Mundo Tienda Online';
+
+  // Stale-While-Revalidate: mostrar caché al instante, Firebase actualiza en background
+  const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
+  if(cached) try{
+    const arr = JSON.parse(cached);
+    if(arr && arr.length){ arr.forEach(p=>products.push(p)); firebaseReady = true; }
+  }catch(e){}
 
   loadCart(); applyConfig(); buildFilters(); renderProducts();
   document.getElementById('search-input').value = '';
@@ -1347,34 +1354,11 @@ function filterBy(cat, btn){
 const BADGE_CLS  = {nuevo:'badge-nuevo',novedad:'badge-novedad',oferta:'badge-oferta',popular:'badge-popular',exclusivo:'badge-exclusivo',agotado:'badge-agotado'};
 const BADGE_LBL  = {nuevo:'🆕 Nuevo',novedad:'✨ Novedad',oferta:'🔥 Oferta',popular:'⭐ Popular',exclusivo:'💎 Exclusivo',agotado:'😔 Agotado'};
 
-function renderProducts(){
-  const q    = document.getElementById('search-input').value.toLowerCase();
-  const sort = document.getElementById('sort-select').value;
-  let list = [...products];
-  if(currentFilter!=='todos') list = list.filter(p=>p.category===currentFilter);
-  if(q) list = list.filter(p=>(p.name+p.desc+p.category+(p.subcat||'')).toLowerCase().includes(q));
-  if(sort==='price-asc')  list.sort((a,b)=>a.price-b.price);
-  else if(sort==='price-desc') list.sort((a,b)=>b.price-a.price);
-  else if(sort==='name')  list.sort((a,b)=>a.name.localeCompare(b.name));
-
-  const isNov = currentFilter==='Novedades';
-  document.getElementById('prod-count').textContent = list.length+' producto'+(list.length!==1?'s':'');
-
-  const grid = document.getElementById('products-grid');
-  grid.parentElement.parentElement.classList.toggle('admin-active', adminMode);
-
-  if(!list.length){
-    grid.innerHTML = firebaseReady
-      ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`
-      : Array(6).fill('').map(()=>`<div class="skeleton-card"><div class="skeleton sk-img"></div><div class="sk-body"><div class="skeleton sk-line s"></div><div class="skeleton sk-line m"></div><div class="skeleton sk-line l"></div><div class="skeleton sk-price"></div><div class="skeleton sk-btn"></div></div></div>`).join('');
-    return;
-  }
-
-  grid.innerHTML = list.map((p,i)=>{
-    const dispCat = p.category;
-    const icon = CAT_ICON[p.category]||'📦';
-    const hasImg = !!p.img;
-    return `
+function _buildCardHTML(p, i){
+  const dispCat = p.category;
+  const icon = CAT_ICON[p.category]||'📦';
+  const hasImg = !!p.img;
+  return `
     <div class="card" style="animation-delay:${Math.min(i,20)*.05}s" onclick="openDetail('${p.id}')">
       ${p.badge?`<div class="card-badge ${BADGE_CLS[p.badge]||''}">${BADGE_LBL[p.badge]||p.badge}</div>`:''}
       <div class="card-img-wrap">
@@ -1385,7 +1369,6 @@ function renderProducts(){
           <span style="font-size:40px">${icon}</span>
           <span>${esc(dispCat)}</span>
         </div>
-        <!-- BOTÓN FOTO -->
         <button class="btn-foto-card" onclick="event.stopPropagation();openFotoModal('${p.id}')">
           📷 ${hasImg?'Cambiar foto':'Agregar foto'}
         </button>
@@ -1410,7 +1393,55 @@ function renderProducts(){
         </div>
       </div>
     </div>`;
-  }).join('');
+}
+
+function renderProducts(){
+  const q    = document.getElementById('search-input').value.toLowerCase();
+  const sort = document.getElementById('sort-select').value;
+  let list = [...products];
+  if(currentFilter!=='todos') list = list.filter(p=>p.category===currentFilter);
+  if(q) list = list.filter(p=>(p.name+p.desc+p.category+(p.subcat||'')).toLowerCase().includes(q));
+  if(sort==='price-asc')  list.sort((a,b)=>a.price-b.price);
+  else if(sort==='price-desc') list.sort((a,b)=>b.price-a.price);
+  else if(sort==='name')  list.sort((a,b)=>a.name.localeCompare(b.name));
+
+  document.getElementById('prod-count').textContent = list.length+' producto'+(list.length!==1?'s':'');
+  const grid = document.getElementById('products-grid');
+  grid.parentElement.parentElement.classList.toggle('admin-active', adminMode);
+
+  if(window._swrObs){ window._swrObs.disconnect(); window._swrObs = null; }
+
+  if(!list.length){
+    grid.innerHTML = firebaseReady
+      ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>Sin resultados</h3><p>Probá otra búsqueda o categoría</p></div>`
+      : Array(8).fill('').map(()=>`<div class="skeleton-card"><div class="skeleton sk-img"></div><div class="sk-body"><div class="skeleton sk-line s"></div><div class="skeleton sk-line m"></div><div class="skeleton sk-line l"></div><div class="skeleton sk-price"></div><div class="skeleton sk-btn"></div></div></div>`).join('');
+    return;
+  }
+
+  _swrList = list;
+  _visibleCount = 20;
+  _renderVisible();
+}
+
+function _renderVisible(){
+  const grid = document.getElementById('products-grid');
+  const slice = _swrList.slice(0, _visibleCount);
+  grid.innerHTML = slice.map((p, i) => _buildCardHTML(p, i)).join('');
+
+  if(_visibleCount < _swrList.length){
+    const sentinel = document.createElement('div');
+    sentinel.style.cssText = 'grid-column:1/-1;height:4px';
+    grid.appendChild(sentinel);
+    window._swrObs = new IntersectionObserver(function(entries){
+      if(entries[0].isIntersecting){
+        window._swrObs.disconnect();
+        window._swrObs = null;
+        _visibleCount += 12;
+        _renderVisible();
+      }
+    }, {rootMargin:'300px'});
+    window._swrObs.observe(sentinel);
+  }
 }
 
 /* ─── MODAL FOTO (el nuevo) ─── */
@@ -2071,6 +2102,7 @@ function startFirebaseSync(){
         products.length = 0;
         up.forEach(function(p){ products.push(p); });
         firebaseReady = true;
+        try{ localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(up)); }catch(e){}
         buildFilters(); renderProducts();
         console.log('Firebase REST sync:', up.length, 'productos');
         setTimeout(doFetch, 60000);
