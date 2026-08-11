@@ -2232,34 +2232,49 @@ function doUpdate(product, imgC, imgsC){
 function fbDelete(id){
   if(window.db) window.db.collection('products').doc(id).delete();
 }
-function _applySnapAdmin(snap){
-  var fp = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
-  var up = fp.filter(function(p){ return !p.fromProveedor; });
-  products.length = 0;
-  up.forEach(function(p){ products.push(p); });
-  firebaseReady = true;
-  buildFilters();
-  renderProducts();
-  console.log('Firebase admin sync:', up.length, 'productos');
+// Parse Firestore REST typed fields
+function _fsDocToObjA(doc){
+  var id = doc.name.split('/').pop();
+  var obj = {id: id};
+  var fields = doc.fields || {};
+  Object.keys(fields).forEach(function(k){
+    var v = fields[k];
+    if(v.stringValue !== undefined) obj[k] = v.stringValue;
+    else if(v.integerValue !== undefined) obj[k] = Number(v.integerValue);
+    else if(v.doubleValue !== undefined) obj[k] = Number(v.doubleValue);
+    else if(v.booleanValue !== undefined) obj[k] = v.booleanValue;
+    else if(v.arrayValue) obj[k] = (v.arrayValue.values||[]).map(function(i){ return i.stringValue||''; });
+    else obj[k] = null;
+  });
+  return obj;
+}
+function _fetchProductsRESTAdmin(token){
+  var KEY = 'AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3n0jdg2rG8';
+  var url = 'https://firestore.googleapis.com/v1/projects/mundo-tienda-online/databases/(default)/documents/products?pageSize=300&key='+KEY;
+  if(token) url += '&pageToken='+token;
+  return fetch(url).then(function(r){ return r.json(); }).then(function(data){
+    var docs = (data.documents||[]).map(_fsDocToObjA).filter(function(p){ return !p.fromProveedor; });
+    if(data.nextPageToken) return _fetchProductsRESTAdmin(data.nextPageToken).then(function(m){ return docs.concat(m); });
+    return docs;
+  });
 }
 function startFirebaseSync(){
-  if(!window.db){ setTimeout(startFirebaseSync, 500); return; }
-  // Lectura server-first
-  window.db.collection('products').get({source:'server'})
-    .then(function(snap){ _applySnapAdmin(snap); })
-    .catch(function(e){
-      console.warn('Server fetch error, reintentando en 3s:', e.message);
-      setTimeout(startFirebaseSync, 3000);
-    });
-  // Listener tiempo real
-  window.db.collection('products').onSnapshot(
-    {includeMetadataChanges:false},
-    function(snap){ if(!snap.metadata.fromCache){ _applySnapAdmin(snap); } },
-    function(e){
-      console.error('Sync error:', e.message);
-      setTimeout(startFirebaseSync, 3000);
-    }
-  );
+  function doFetch(){
+    _fetchProductsRESTAdmin()
+      .then(function(up){
+        products.length = 0;
+        up.forEach(function(p){ products.push(p); });
+        firebaseReady = true;
+        buildFilters(); renderProducts();
+        console.log('Admin REST sync:', up.length, 'productos');
+        setTimeout(doFetch, 30000);
+      })
+      .catch(function(e){
+        console.warn('Admin REST error, reintentando en 5s:', e.message);
+        setTimeout(doFetch, 5000);
+      });
+  }
+  doFetch();
 }
 window.addEventListener('load', function(){
   setTimeout(startFirebaseSync, 0);
