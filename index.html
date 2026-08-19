@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mundo Tienda Online — Catálogo Mayorista</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -44,8 +45,8 @@ ul{list-style:none}
 .btn-menu:hover{background:var(--surface)}
 @media(min-width:768px){.btn-menu{display:none}}
 .logo-link{display:flex;align-items:center;flex-shrink:0;text-decoration:none}
-.logo-link img{height:80px;width:auto;object-fit:contain;display:block}
-@media(min-width:768px){.logo-link img{height:110px}}
+.logo-link img{height:56px;width:auto;max-width:none;object-fit:contain;display:block}
+@media(min-width:768px){.logo-link img{height:64px}}
 .header-nav{display:none;gap:4px}
 @media(min-width:768px){.header-nav{display:flex}}
 .header-nav a{padding:6px 12px;border-radius:var(--radius);font-size:14px;font-weight:500;color:var(--muted);transition:color .15s,background .15s}
@@ -254,9 +255,107 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .toast.success{background:var(--success)}
 </style>
 </head>
+<script type="module">
+// ── FIREBASE SDK (onSnapshot real-time) ────────────────────────
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const _app = initializeApp({
+  apiKey:'AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3nOjdg2rG8',
+  authDomain:'mundo-tienda-online.firebaseapp.com',
+  projectId:'mundo-tienda-online'
+});
+const _db = getFirestore(_app);
+
+// ── FOTOS: solo en localStorage (base64 demasiado grande para Firestore) ──
+function saveLocalPhotos(id,photos){ try{ localStorage.setItem('mto_photos_'+id,JSON.stringify(photos||[])); }catch(e){} }
+function loadLocalPhotos(id){ try{ return JSON.parse(localStorage.getItem('mto_photos_'+id)||'[]'); }catch(e){ return []; } }
+
+// ── ESTADO DE SYNC ──────────────────────────────────────────────
+function showSyncStatus(ok,msg){
+  let el=document.getElementById('_sync-status');
+  if(!el){ el=document.createElement('div'); el.id='_sync-status';
+    el.style.cssText='position:fixed;bottom:80px;left:12px;font-size:11px;padding:4px 10px;border-radius:20px;z-index:9999;pointer-events:none;transition:opacity .5s';
+    document.body.appendChild(el); }
+  el.textContent=msg; el.style.background=ok?'#16a34a':'#dc2626'; el.style.color='#fff'; el.style.opacity='1';
+  setTimeout(()=>{ el.style.opacity='0'; },3000);
+}
+
+// ── LISTENER PRODUCTOS (onSnapshot en tiempo real) ──────────────
+window._fsUnsub=null;
+window._fsStartListeners=function(){
+  if(window._fsUnsub) window._fsUnsub(); // evita duplicados
+
+  // Listener 1: colección de productos
+  window._fsUnsub=onSnapshot(collection(_db,'mayorista_products'),
+    (snap)=>{
+      if(typeof products==='undefined') return;
+      products.length=0;
+      snap.docs.forEach(d=>{
+        const p=d.data();
+        p.photos=loadLocalPhotos(p.id); // fotos desde localStorage
+        products.push(p);
+      });
+      localStorage.setItem('mto_products',JSON.stringify(products));
+      if(typeof renderApp==='function') renderApp();
+      showSyncStatus(true,`✓ ${products.length} productos sincronizados`);
+    },
+    (err)=>{ showSyncStatus(false,'Error Firestore: '+err.message); }
+  );
+
+  // Listener 2: configuración global (markup)
+  onSnapshot(doc(_db,'settings','pricing'),
+    (snap)=>{
+      if(snap.exists()){
+        const val=snap.data().globalMarkup??0;
+        if(typeof globalMarkup!=='undefined' && globalMarkup!==val){
+          globalMarkup=val;
+          localStorage.setItem('mto_markup',String(val));
+          if(typeof renderApp==='function') renderApp();
+          showSyncStatus(true,`✓ Precio actualizado: +${val}%`);
+        } else {
+          globalMarkup=val;
+          localStorage.setItem('mto_markup',String(val));
+        }
+      }
+    },
+    (err)=>{ console.error('Settings listener error:',err); }
+  );
+};
+
+// ── CRUD Firestore ──────────────────────────────────────────────
+window._fsSave=async function(p){
+  try{
+    const data={...p};
+    if(data.photos&&data.photos.length) saveLocalPhotos(data.id,data.photos);
+    delete data.photos; // no guardar base64 en Firestore
+    // Asegura que basePrice existe
+    if(!data.basePrice) data.basePrice=data.price;
+    await setDoc(doc(_db,'mayorista_products',String(data.id)),data);
+  }catch(e){ showSyncStatus(false,'Error al guardar: '+e.message); console.error(e); }
+};
+
+window._fsDelete=async function(id){
+  try{
+    await deleteDoc(doc(_db,'mayorista_products',String(id)));
+  }catch(e){ showSyncStatus(false,'Error al eliminar: '+e.message); console.error(e); }
+};
+
+// Guarda el markup SOLO en Firestore settings — nunca modifica precios base
+window._fsSaveMarkup=async function(val){
+  try{
+    await setDoc(doc(_db,'settings','pricing'),{globalMarkup:val},{merge:true});
+  }catch(e){ showSyncStatus(false,'Error al guardar markup: '+e.message); console.error(e); }
+};
+
+// Inicia los listeners cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded',()=>{
+  if(window._fsStartListeners) window._fsStartListeners();
+});
+</script>
 <script>
+// ── FIREBASE LEGACY STUB (mantiene compatibilidad con código existente) ──
 (function(){
-  const API_KEY = 'AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3nOjdg2rG8';
   const PROJECT = 'mundo-tienda-online';
   const COLL = 'mayorista_products';
   const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/${COLL}`;
@@ -336,40 +435,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     }catch(e){ showSyncStatus(false,'Error al eliminar'); }
   };
 
-  window._fsInit=async function(){
-    // Renderiza inmediatamente con localStorage, luego sincroniza Firestore
-    if(typeof renderApp==='function') renderApp();
-    const docs=await loadAll();
-    if(docs===null) return;
-    if(docs.length>0 && typeof products!=='undefined'){
-      const remoteSig=docs.map(p=>p.id+'|'+p.price).sort().join(',');
-      const localSig=products.map(p=>p.id+'|'+p.price).sort().join(',');
-      if(remoteSig!==localSig){
-        products.length=0;
-        docs.forEach(p=>products.push(p));
-        localStorage.setItem('mto_products',JSON.stringify(products));
-        if(typeof renderApp==='function') renderApp();
-      }
-      showSyncStatus(true,`✓ ${docs.length} producto${docs.length>1?'s':''} sincronizado${docs.length>1?'s':''}`);
-    }
-  };
-
-  window._fsPoll=function(){
-    setInterval(async()=>{
-      const docs=await loadAll();
-      if(docs===null||docs.length===0) return;
-      if(typeof products==='undefined') return;
-      const localSig=products.map(p=>p.id+'|'+p.price+'|'+p.name).sort().join(',');
-      const remoteSig=docs.map(p=>p.id+'|'+p.price+'|'+p.name).sort().join(',');
-      if(localSig!==remoteSig){
-        products.length=0;
-        docs.forEach(p=>products.push(p));
-        localStorage.setItem('mto_products',JSON.stringify(products));
-        if(typeof renderApp==='function') renderApp();
-        showSyncStatus(true,'✓ Catálogo actualizado');
-      }
-    },3000);
-  };
+  // _fsInit y _fsPoll reemplazados por onSnapshot en el módulo de arriba
+  window._fsInit=function(){ /* reemplazado por onSnapshot */ };
+  window._fsPoll=function(){ /* reemplazado por onSnapshot */ };
 })();
 </script>
 <body>
@@ -517,9 +585,10 @@ let _adminCreds = JSON.parse(localStorage.getItem('mto_creds')) || {u:'admin', h
 let globalMarkup = parseFloat(localStorage.getItem('mto_markup') || '0');
 let searchQ = '';
 
+// Siempre parte del basePrice — nunca acumula markup
 function applyMarkup(price){ return globalMarkup>0 ? Math.round(price*(1+globalMarkup/100)) : price; }
-function displayPrice(p){ return applyMarkup(p.price); }
-function displayPriceOld(p){ return p.priceOld>0 ? applyMarkup(p.priceOld) : 0; }
+function displayPrice(p){ return applyMarkup(p.basePrice||p.price); }
+function displayPriceOld(p){ const base=p.basePriceOld||p.priceOld||0; return base>0 ? applyMarkup(base) : 0; }
 
 function saveProducts(){ localStorage.setItem('mto_products', JSON.stringify(products)); if(window._fsSave) products.forEach(p=>window._fsSave(p)); }
 function saveCart(){ localStorage.setItem('mto_cart', JSON.stringify(cart)); }
@@ -811,20 +880,15 @@ function viewAdminConfig(){
 
 function saveMarkup(){
   const val=parseFloat(document.getElementById('cfg-markup')?.value||'0');
-  if(isNaN(val)||val<=0){const msg=document.getElementById('cfg-markup-msg');msg.textContent='Ingresá un porcentaje mayor a 0.';msg.style.color='var(--destructive)';msg.style.display='block';return;}
-  // Aplica el aumento directamente al precio base de cada producto
-  products.forEach(p=>{
-    p.price=Math.round(p.price*(1+val/100));
-    if(p.priceOld>0) p.priceOld=Math.round(p.priceOld*(1+val/100));
-  });
-  localStorage.setItem('mto_products',JSON.stringify(products));
-  if(window._fsSave) products.forEach(p=>window._fsSave(p));
-  // Resetea markup a 0
-  globalMarkup=0;
-  localStorage.setItem('mto_markup','0');
   const msg=document.getElementById('cfg-markup-msg');
-  msg.textContent=`+${val}% aplicado a todos los productos. El campo fue reseteado a 0.`;
+  if(isNaN(val)||val<0){ msg.textContent='Ingresá un valor válido (0 o mayor).'; msg.style.color='var(--destructive)'; msg.style.display='block'; return; }
+  // Solo guarda el % en Firestore — NUNCA modifica basePrice
+  globalMarkup=val;
+  localStorage.setItem('mto_markup',String(val));
+  if(window._fsSaveMarkup) window._fsSaveMarkup(val);
+  msg.textContent=val===0?'Markup eliminado. Mostrando precios base.': `+${val}% aplicado. Todos los dispositivos se actualizarán en segundos.`;
   msg.style.color='var(--success)'; msg.style.display='block';
+  renderApp(); // actualiza precios localmente al instante
   setTimeout(()=>{ navigate('#/admin/config'); },1500);
 }
 
@@ -901,8 +965,15 @@ function saveProduct(id){
   const featured=document.getElementById('pf-featured').checked;
   const desc=(document.getElementById('pf-desc')?.value||'').trim();
   const photos=(window._pfPhotos||[]).filter(Boolean);
-  if(id){ const p=products.find(x=>x.id===id); if(p) Object.assign(p,{name,cat,code,price,priceOld,stock,featured,desc,photos}); }
-  else{ const newId=Math.max(0,...products.map(p=>p.id))+1; const slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,60); products.push({id:newId,slug,name,cat,code,price,priceOld,stock,featured,desc,photos}); }
+  // basePrice = precio base intocable; price = alias para compatibilidad
+  if(id){
+    const p=products.find(x=>x.id===id);
+    if(p) Object.assign(p,{name,cat,code,price,basePrice:price,priceOld,basePriceOld:priceOld,stock,featured,desc,photos});
+  } else {
+    const newId=Math.max(0,...products.map(p=>p.id))+1;
+    const slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,60);
+    products.push({id:newId,slug,name,cat,code,price,basePrice:price,priceOld,basePriceOld:priceOld,stock,featured,desc,photos});
+  }
   window._pfPhotos=undefined;
   localStorage.setItem('mto_products', JSON.stringify(products));
   const savedP=id?products.find(x=>x.id===id):products[products.length-1];
@@ -1039,8 +1110,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement?.id==='admin-pass')doLogin();});
 
   updateCartUI(); renderApp();
-  if(window._fsInit) window._fsInit();
-  if(window._fsPoll) window._fsPoll();
+  // Los listeners onSnapshot se inician desde el módulo Firebase
 });
 </script>
 </body>
