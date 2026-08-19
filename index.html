@@ -254,39 +254,88 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .toast.success{background:var(--success)}
 </style>
 </head>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+<script>
+(function(){
+  const API_KEY = 'AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3nOjdg2rG8';
+  const PROJECT = 'mundo-tienda-online';
+  const COLL = 'mayorista_products';
+  const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/${COLL}`;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3nOjdg2rG8",
-  authDomain: "mundo-tienda-online.firebaseapp.com",
-  projectId: "mundo-tienda-online",
-  storageBucket: "mundo-tienda-online.firebasestorage.app",
-  messagingSenderId: "327509923535",
-  appId: "1:327509923535:web:3be8bcb1615368443309ba"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const COLL = 'mayorista_products';
-
-window._db = db;
-window._fsCol = ()=>collection(db, COLL);
-window._fsDoc = (id)=>doc(db, COLL, String(id));
-
-// Escucha en tiempo real — actualiza products y re-renderiza
-onSnapshot(collection(db, COLL), (snap)=>{
-  window._products = snap.docs.map(d=>d.data());
-  if(typeof products !== 'undefined'){
-    products.length=0;
-    window._products.forEach(p=>products.push(p));
+  function toObj(doc){
+    const out={};
+    if(!doc.fields) return out;
+    for(const[k,v] of Object.entries(doc.fields)){
+      if(v.stringValue!==undefined) out[k]=v.stringValue;
+      else if(v.integerValue!==undefined) out[k]=Number(v.integerValue);
+      else if(v.doubleValue!==undefined) out[k]=Number(v.doubleValue);
+      else if(v.booleanValue!==undefined) out[k]=v.booleanValue;
+      else if(v.arrayValue) out[k]=(v.arrayValue.values||[]).map(x=>x.stringValue||x.integerValue||x.doubleValue||'');
+      else if(v.nullValue!==undefined) out[k]=null;
+    }
+    return out;
   }
-  if(typeof renderApp === 'function') renderApp();
-});
 
-window._fsSave = async (p)=>{ await setDoc(doc(db, COLL, String(p.id)), p); };
-window._fsDelete = async (id)=>{ await deleteDoc(doc(db, COLL, String(id))); };
+  function toFields(obj){
+    const fields={};
+    for(const[k,v] of Object.entries(obj)){
+      if(v===null||v===undefined) fields[k]={nullValue:null};
+      else if(typeof v==='boolean') fields[k]={booleanValue:v};
+      else if(typeof v==='number') fields[k]=Number.isInteger(v)?{integerValue:String(v)}:{doubleValue:v};
+      else if(Array.isArray(v)) fields[k]={arrayValue:{values:v.map(x=>({stringValue:String(x||'')}))}};
+      else fields[k]={stringValue:String(v)};
+    }
+    return fields;
+  }
+
+  async function loadAll(){
+    try{
+      const r=await fetch(`${BASE}?key=${API_KEY}`);
+      const data=await r.json();
+      if(!data.documents) return [];
+      return data.documents.map(d=>toObj(d));
+    }catch(e){ console.error('Firebase load error',e); return []; }
+  }
+
+  window._fsSave=async function(p){
+    try{
+      await fetch(`${BASE}/${p.id}?key=${API_KEY}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields:toFields(p)})
+      });
+    }catch(e){ console.error('Firebase save error',e); }
+  };
+
+  window._fsDelete=async function(id){
+    try{
+      await fetch(`${BASE}/${id}?key=${API_KEY}`,{method:'DELETE'});
+    }catch(e){ console.error('Firebase delete error',e); }
+  };
+
+  // Carga productos desde Firestore al iniciar
+  window._fsInit=async function(){
+    const docs=await loadAll();
+    if(docs.length>0 && typeof products!=='undefined'){
+      products.length=0;
+      docs.forEach(p=>products.push(p));
+      localStorage.setItem('mto_products',JSON.stringify(products));
+    }
+    if(typeof renderApp==='function') renderApp();
+  };
+
+  // Polling cada 10 segundos para sincronizar entre dispositivos
+  window._fsPoll=function(){
+    setInterval(async()=>{
+      const docs=await loadAll();
+      if(docs.length>0 && typeof products!=='undefined'){
+        products.length=0;
+        docs.forEach(p=>products.push(p));
+        localStorage.setItem('mto_products',JSON.stringify(products));
+        if(typeof renderApp==='function') renderApp();
+      }
+    },10000);
+  };
+})();
 </script>
 <body>
 
@@ -955,6 +1004,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement?.id==='admin-pass')doLogin();});
 
   updateCartUI(); renderApp();
+  if(window._fsInit) window._fsInit();
+  if(window._fsPoll) window._fsPoll();
 });
 </script>
 </body>
