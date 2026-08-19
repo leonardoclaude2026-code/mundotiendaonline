@@ -261,23 +261,33 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   const COLL = 'mayorista_products';
   const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/${COLL}`;
 
-  function toObj(doc){
+  // Fotos locales por id — no se envían a Firestore (demasiado grandes)
+  function saveLocalPhotos(id, photos){ try{ localStorage.setItem('mto_photos_'+id, JSON.stringify(photos||[])); }catch(e){} }
+  function loadLocalPhotos(id){ try{ return JSON.parse(localStorage.getItem('mto_photos_'+id)||'[]'); }catch(e){ return []; } }
+
+  function toObj(fsDoc){
     const out={};
-    if(!doc.fields) return out;
-    for(const[k,v] of Object.entries(doc.fields)){
+    if(!fsDoc.fields) return out;
+    for(const[k,v] of Object.entries(fsDoc.fields)){
       if(v.stringValue!==undefined) out[k]=v.stringValue;
       else if(v.integerValue!==undefined) out[k]=Number(v.integerValue);
       else if(v.doubleValue!==undefined) out[k]=Number(v.doubleValue);
       else if(v.booleanValue!==undefined) out[k]=v.booleanValue;
-      else if(v.arrayValue) out[k]=(v.arrayValue.values||[]).map(x=>x.stringValue||x.integerValue||x.doubleValue||'');
+      else if(v.arrayValue) out[k]=(v.arrayValue.values||[]).map(x=>x.stringValue||'');
       else if(v.nullValue!==undefined) out[k]=null;
     }
+    // Restaura fotos desde localStorage local
+    out.photos = loadLocalPhotos(out.id);
     return out;
   }
 
-  function toFields(obj){
+  function toFields(p){
+    // Guarda fotos en localStorage, NO en Firestore
+    if(p.photos&&p.photos.length) saveLocalPhotos(p.id, p.photos);
     const fields={};
-    for(const[k,v] of Object.entries(obj)){
+    const skip=['photos'];
+    for(const[k,v] of Object.entries(p)){
+      if(skip.includes(k)) continue;
       if(v===null||v===undefined) fields[k]={nullValue:null};
       else if(typeof v==='boolean') fields[k]={booleanValue:v};
       else if(typeof v==='number') fields[k]=Number.isInteger(v)?{integerValue:String(v)}:{doubleValue:v};
@@ -287,53 +297,72 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     return fields;
   }
 
+  function showSyncStatus(ok, msg){
+    let el=document.getElementById('_sync-status');
+    if(!el){ el=document.createElement('div'); el.id='_sync-status';
+      el.style.cssText='position:fixed;bottom:80px;left:12px;font-size:11px;padding:4px 10px;border-radius:20px;z-index:9999;pointer-events:none;transition:opacity .5s';
+      document.body.appendChild(el); }
+    el.textContent=msg; el.style.background=ok?'#16a34a':'#dc2626'; el.style.color='#fff'; el.style.opacity='1';
+    setTimeout(()=>{ el.style.opacity='0'; },3000);
+  }
+
   async function loadAll(){
     try{
       const r=await fetch(`${BASE}?key=${API_KEY}`);
       const data=await r.json();
-      if(!data.documents) return [];
+      if(data.error){ showSyncStatus(false,'Error Firestore: '+data.error.message); return null; }
+      if(!data.documents){ return []; }
       return data.documents.map(d=>toObj(d));
-    }catch(e){ console.error('Firebase load error',e); return []; }
+    }catch(e){ showSyncStatus(false,'Sin conexión a Firestore'); return null; }
   }
 
   window._fsSave=async function(p){
     try{
-      await fetch(`${BASE}/${p.id}?key=${API_KEY}`,{
+      const r=await fetch(`${BASE}/${p.id}?key=${API_KEY}`,{
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields:toFields(p)})
       });
-    }catch(e){ console.error('Firebase save error',e); }
+      const data=await r.json();
+      if(data.error) showSyncStatus(false,'Error al guardar: '+data.error.message);
+      else showSyncStatus(true,'✓ Guardado en la nube');
+    }catch(e){ showSyncStatus(false,'Error de conexión al guardar'); }
   };
 
   window._fsDelete=async function(id){
     try{
       await fetch(`${BASE}/${id}?key=${API_KEY}`,{method:'DELETE'});
-    }catch(e){ console.error('Firebase delete error',e); }
+      showSyncStatus(true,'✓ Eliminado de la nube');
+    }catch(e){ showSyncStatus(false,'Error al eliminar'); }
   };
 
-  // Carga productos desde Firestore al iniciar
   window._fsInit=async function(){
     const docs=await loadAll();
+    if(docs===null) return; // error de conexión, usar localStorage
     if(docs.length>0 && typeof products!=='undefined'){
       products.length=0;
       docs.forEach(p=>products.push(p));
       localStorage.setItem('mto_products',JSON.stringify(products));
+      showSyncStatus(true,`✓ ${docs.length} producto${docs.length>1?'s':''} sincronizado${docs.length>1?'s':''}`);
     }
     if(typeof renderApp==='function') renderApp();
   };
 
-  // Polling cada 10 segundos para sincronizar entre dispositivos
   window._fsPoll=function(){
     setInterval(async()=>{
       const docs=await loadAll();
-      if(docs.length>0 && typeof products!=='undefined'){
+      if(docs===null||docs.length===0) return;
+      if(typeof products==='undefined') return;
+      const localIds=products.map(p=>String(p.id)).sort().join(',');
+      const remoteIds=docs.map(p=>String(p.id)).sort().join(',');
+      if(localIds!==remoteIds){
         products.length=0;
         docs.forEach(p=>products.push(p));
         localStorage.setItem('mto_products',JSON.stringify(products));
         if(typeof renderApp==='function') renderApp();
+        showSyncStatus(true,'✓ Productos actualizados');
       }
-    },10000);
+    },8000);
   };
 })();
 </script>
