@@ -353,14 +353,15 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       const docs=await loadAll();
       if(docs===null||docs.length===0) return;
       if(typeof products==='undefined') return;
-      const localIds=products.map(p=>String(p.id)).sort().join(',');
-      const remoteIds=docs.map(p=>String(p.id)).sort().join(',');
-      if(localIds!==remoteIds){
+      // Compara ids Y precios para detectar cambios de markup
+      const localSig=products.map(p=>p.id+'|'+p.price).sort().join(',');
+      const remoteSig=docs.map(p=>p.id+'|'+p.price).sort().join(',');
+      if(localSig!==remoteSig){
         products.length=0;
         docs.forEach(p=>products.push(p));
         localStorage.setItem('mto_products',JSON.stringify(products));
         if(typeof renderApp==='function') renderApp();
-        showSyncStatus(true,'✓ Productos actualizados');
+        showSyncStatus(true,'✓ Precios actualizados');
       }
     },8000);
   };
