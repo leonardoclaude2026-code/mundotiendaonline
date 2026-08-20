@@ -307,16 +307,15 @@ window._fsStartListeners=function(){
   onSnapshot(doc(_db,'settings','pricing'),
     (snap)=>{
       if(snap.exists()){
-        const val=snap.data().globalMarkup??0;
-        if(typeof globalMarkup!=='undefined' && globalMarkup!==val){
-          globalMarkup=val;
-          localStorage.setItem('mto_markup',String(val));
-          if(typeof renderApp==='function') renderApp();
-          showSyncStatus(true,`✓ Precio actualizado: +${val}%`);
-        } else {
-          globalMarkup=val;
-          localStorage.setItem('mto_markup',String(val));
-        }
+        const val=Number(snap.data().globalMarkup??0);
+        window.globalMarkup=val;
+        localStorage.setItem('mto_markup',String(val));
+        if(typeof renderApp==='function') renderApp();
+        showSyncStatus(true, val===0 ? '✓ Markup sincronizado: 0%' : `✓ Markup sincronizado: +${val}%`);
+      } else {
+        window.globalMarkup=0;
+        localStorage.setItem('mto_markup','0');
+        if(typeof renderApp==='function') renderApp();
       }
     },
     (err)=>{ console.error('Settings listener error:',err); }
@@ -341,11 +340,29 @@ window._fsDelete=async function(id){
   }catch(e){ showSyncStatus(false,'Error al eliminar: '+e.message); console.error(e); }
 };
 
-// Guarda el markup SOLO en Firestore settings — nunca modifica precios base
+// Guarda el markup % en Firestore settings
 window._fsSaveMarkup=async function(val){
   try{
     await setDoc(doc(_db,'settings','pricing'),{globalMarkup:val},{merge:true});
   }catch(e){ showSyncStatus(false,'Error al guardar markup: '+e.message); console.error(e); }
+};
+
+// Aplica el markup bakeando el precio en cada producto y resetea markup a 0
+window._fsBakeMarkup=async function(pctVal, prods){
+  try{
+    const batch=[];
+    for(const p of prods){
+      const newBase=Math.round((p.basePrice||p.price)*(1+pctVal/100));
+      const newOld=p.basePriceOld>0 ? Math.round(p.basePriceOld*(1+pctVal/100)) : (p.priceOld>0 ? Math.round(p.priceOld*(1+pctVal/100)) : 0);
+      const updated={...p, price:newBase, basePrice:newBase, priceOld:newOld||0, basePriceOld:newOld||0};
+      delete updated.photos;
+      if(!updated.basePrice) updated.basePrice=updated.price;
+      batch.push(setDoc(doc(_db,'mayorista_products',String(updated.id)),updated));
+    }
+    batch.push(setDoc(doc(_db,'settings','pricing'),{globalMarkup:0},{merge:true}));
+    await Promise.all(batch);
+    showSyncStatus(true,`✓ Precios actualizados +${pctVal}% y fijados en todos los dispositivos`);
+  }catch(e){ showSyncStatus(false,'Error al fijar precios: '+e.message); console.error(e); }
 };
 
 // Inicia los listeners cuando el DOM esté listo
@@ -582,11 +599,10 @@ let cart = JSON.parse(localStorage.getItem('mto_cart') || '[]');
 let adminSession = sessionStorage.getItem('mto_admin') === 'true';
 
 let _adminCreds = JSON.parse(localStorage.getItem('mto_creds')) || {u:'admin', h:btoa('mayorista2026')};
-let globalMarkup = parseFloat(localStorage.getItem('mto_markup') || '0');
+window.globalMarkup = parseFloat(localStorage.getItem('mto_markup') || '0');
 let searchQ = '';
 
-// Siempre parte del basePrice — nunca acumula markup
-function applyMarkup(price){ return globalMarkup>0 ? Math.round(price*(1+globalMarkup/100)) : price; }
+function applyMarkup(price){ const m=window.globalMarkup||0; return m>0 ? Math.round(price*(1+m/100)) : price; }
 function displayPrice(p){ return applyMarkup(p.basePrice||p.price); }
 function displayPriceOld(p){ const base=p.basePriceOld||p.priceOld||0; return base>0 ? applyMarkup(base) : 0; }
 
@@ -853,15 +869,23 @@ function viewAdminConfig(){
       <button class="btn-secondary" onclick="navigate('#/admin')">← Volver</button>
     </div>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:20px">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--fg)">💰 Porcentaje de aumento (Markup)</h2>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Se aplica sobre el precio base de todos los productos. Ejemplo: 20 = +20% al precio.</p>
-      <div style="display:flex;gap:10px;align-items:flex-end">
-        <div class="form-group" style="flex:1;margin:0"><label class="form-label">Markup global (%)</label><input class="form-input" type="number" id="cfg-markup" min="0" max="500" step="0.5" value="${globalMarkup}" placeholder="0"></div>
-        <button class="btn-block" style="width:auto;padding:0 20px;height:44px;margin:0" onclick="saveMarkup()">Aplicar</button>
+      <h2 style="font-size:15px;font-weight:700;margin-bottom:8px;color:var(--fg)">💰 Porcentaje de aumento global</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Ingresá el porcentaje y elegí la acción. <strong>APLICAR Y FIJAR</strong> guarda el nuevo precio permanentemente en todos los dispositivos. <strong>RESETEAR A 0%</strong> solo elimina el porcentaje sin modificar los precios.</p>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:120px;margin:0"><label class="form-label">Porcentaje de aumento (%)</label><input class="form-input" type="number" id="cfg-markup" min="0" max="500" step="0.5" value="${globalMarkup}" placeholder="Ej: 20" oninput="saveMarkup()"></div>
+        <button class="btn-block" style="width:auto;padding:0 16px;height:44px;margin:0;background:var(--primary)" onclick="bakeMarkup()">✔ APLICAR Y FIJAR</button>
+        <button class="btn-block" style="width:auto;padding:0 16px;height:44px;margin:0;background:var(--muted)" onclick="resetMarkup()">✕ RESETEAR A 0%</button>
       </div>
       <div id="cfg-markup-msg" style="font-size:13px;margin-top:8px;display:none"></div>
       <div style="margin-top:12px;padding:10px 12px;background:var(--surface);border-radius:var(--radius);font-size:13px;color:var(--muted)">
-        Markup actual: <strong style="color:var(--primary)">${globalMarkup}%</strong> &nbsp;·&nbsp; Ejemplo: precio base $10.000 → muestra <strong>${fmt(applyMarkup(10000))}</strong>
+        Markup actual: <strong style="color:var(--primary)">${globalMarkup}%</strong> &nbsp;·&nbsp;
+        ${globalMarkup>0
+          ? `Vista previa: precio de $10.000 se mostraría como <strong>${fmt(applyMarkup(10000))}</strong>`
+          : `Sin aumento activo. Los precios muestran el valor base guardado.`}
+      </div>
+      <div style="margin-top:8px;padding:10px 12px;background:#fff8e1;border:1px solid #ffd54f;border-radius:var(--radius);font-size:12px;color:#795548">
+        ⚠️ <strong>APLICAR Y FIJAR</strong>: aumenta el precio base de todos los productos y lo guarda en Firebase. No se puede deshacer. <br>
+        ↺ <strong>RESETEAR A 0%</strong>: solo pone el porcentaje en 0. Los precios <em>no cambian</em>.
       </div>
     </div>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px">
@@ -879,17 +903,51 @@ function viewAdminConfig(){
 }
 
 function saveMarkup(){
+  // Solo previsualiza el % — no baja el precio al resetear
   const val=parseFloat(document.getElementById('cfg-markup')?.value||'0');
   const msg=document.getElementById('cfg-markup-msg');
   if(isNaN(val)||val<0){ msg.textContent='Ingresá un valor válido (0 o mayor).'; msg.style.color='var(--destructive)'; msg.style.display='block'; return; }
-  // Solo guarda el % en Firestore — NUNCA modifica basePrice
-  globalMarkup=val;
+  window.globalMarkup=val;
   localStorage.setItem('mto_markup',String(val));
   if(window._fsSaveMarkup) window._fsSaveMarkup(val);
-  msg.textContent=val===0?'Markup eliminado. Mostrando precios base.': `+${val}% aplicado. Todos los dispositivos se actualizarán en segundos.`;
+  msg.textContent=`Vista previa +${val}%. Usá "APLICAR Y FIJAR" para guardar los precios definitivamente.`;
+  msg.style.color='var(--primary)'; msg.style.display='block';
+  renderApp();
+}
+
+function bakeMarkup(){
+  // Fija los precios actuales (con markup) como nuevos precios base y resetea markup a 0
+  const val=parseFloat(document.getElementById('cfg-markup')?.value||'0');
+  const msg=document.getElementById('cfg-markup-msg');
+  if(isNaN(val)||val<=0){ msg.textContent='Ingresá un porcentaje mayor a 0 para aplicar.'; msg.style.color='var(--destructive)'; msg.style.display='block'; return; }
+  if(products.length===0){ msg.textContent='No hay productos para actualizar.'; msg.style.color='var(--destructive)'; msg.style.display='block'; return; }
+  // Actualiza localmente primero
+  products.forEach(p=>{
+    const newBase=Math.round((p.basePrice||p.price)*(1+val/100));
+    const newOld=p.basePriceOld>0?Math.round(p.basePriceOld*(1+val/100)):(p.priceOld>0?Math.round(p.priceOld*(1+val/100)):0);
+    p.price=newBase; p.basePrice=newBase; p.priceOld=newOld||0; p.basePriceOld=newOld||0;
+  });
+  window.globalMarkup=0;
+  localStorage.setItem('mto_markup','0');
+  localStorage.setItem('mto_products',JSON.stringify(products));
+  // Guarda todo en Firestore
+  if(window._fsBakeMarkup) window._fsBakeMarkup(val, products);
+  msg.textContent=`✓ Precios actualizados +${val}% y fijados. Markup reseteado a 0%.`;
   msg.style.color='var(--success)'; msg.style.display='block';
-  renderApp(); // actualiza precios localmente al instante
-  setTimeout(()=>{ navigate('#/admin/config'); },1500);
+  document.getElementById('cfg-markup').value='0';
+  renderApp();
+}
+
+function resetMarkup(){
+  // Solo resetea el % a 0 — NO modifica los precios actuales
+  const msg=document.getElementById('cfg-markup-msg');
+  window.globalMarkup=0;
+  localStorage.setItem('mto_markup','0');
+  if(window._fsSaveMarkup) window._fsSaveMarkup(0);
+  msg.textContent='Porcentaje reseteado a 0%. Los precios actuales no fueron modificados.';
+  msg.style.color='var(--success)'; msg.style.display='block';
+  document.getElementById('cfg-markup').value='0';
+  renderApp();
 }
 
 function saveCredentials(){
