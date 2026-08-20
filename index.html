@@ -872,7 +872,7 @@ function viewAdminConfig(){
       <h2 style="font-size:15px;font-weight:700;margin-bottom:8px;color:var(--fg)">💰 Porcentaje de aumento global</h2>
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Ingresá el porcentaje y elegí la acción. <strong>APLICAR Y FIJAR</strong> guarda el nuevo precio permanentemente en todos los dispositivos. <strong>RESETEAR A 0%</strong> solo elimina el porcentaje sin modificar los precios.</p>
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-        <div class="form-group" style="flex:1;min-width:120px;margin:0"><label class="form-label">Porcentaje de aumento (%)</label><input class="form-input" type="number" id="cfg-markup" min="0" max="500" step="0.5" value="${globalMarkup}" placeholder="Ej: 20" oninput="saveMarkup()"></div>
+        <div class="form-group" style="flex:1;min-width:120px;margin:0"><label class="form-label">Porcentaje de aumento (%)</label><input class="form-input" type="number" id="cfg-markup" min="0" max="500" step="0.5" value="${globalMarkup}" placeholder="Ej: 20"></div>
         <button class="btn-block" style="width:auto;padding:0 16px;height:44px;margin:0;background:var(--primary)" onclick="bakeMarkup()">✔ APLICAR Y FIJAR</button>
         <button class="btn-block" style="width:auto;padding:0 16px;height:44px;margin:0;background:var(--muted)" onclick="resetMarkup()">✕ RESETEAR A 0%</button>
       </div>
@@ -882,10 +882,6 @@ function viewAdminConfig(){
         ${globalMarkup>0
           ? `Vista previa: precio de $10.000 se mostraría como <strong>${fmt(applyMarkup(10000))}</strong>`
           : `Sin aumento activo. Los precios muestran el valor base guardado.`}
-      </div>
-      <div style="margin-top:8px;padding:10px 12px;background:#fff8e1;border:1px solid #ffd54f;border-radius:var(--radius);font-size:12px;color:#795548">
-        ⚠️ <strong>APLICAR Y FIJAR</strong>: aumenta el precio base de todos los productos y lo guarda en Firebase. No se puede deshacer. <br>
-        ↺ <strong>RESETEAR A 0%</strong>: solo pone el porcentaje en 0. Los precios <em>no cambian</em>.
       </div>
     </div>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px">
