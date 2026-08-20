@@ -258,18 +258,17 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script type="module">
 // ── FIREBASE SDK (onSnapshot real-time) ────────────────────────
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 
 const _app = initializeApp({
   apiKey:'AIzaSyAYOOwZB-pOZu8uAnY1-ZaOP3nOjdg2rG8',
   authDomain:'mundo-tienda-online.firebaseapp.com',
-  projectId:'mundo-tienda-online'
+  projectId:'mundo-tienda-online',
+  storageBucket:'mundo-tienda-online.appspot.com'
 });
 const _db = getFirestore(_app);
-
-// ── FOTOS: solo en localStorage (base64 demasiado grande para Firestore) ──
-function saveLocalPhotos(id,photos){ try{ localStorage.setItem('mto_photos_'+id,JSON.stringify(photos||[])); }catch(e){} }
-function loadLocalPhotos(id){ try{ return JSON.parse(localStorage.getItem('mto_photos_'+id)||'[]'); }catch(e){ return []; } }
+const _storage = getStorage(_app);
 
 // ── ESTADO DE SYNC ──────────────────────────────────────────────
 function showSyncStatus(ok,msg){
@@ -293,10 +292,10 @@ window._fsStartListeners=function(){
       products.length=0;
       snap.docs.forEach(d=>{
         const p=d.data();
-        p.photos=loadLocalPhotos(p.id); // fotos desde localStorage
+        // Fotos vienen como URLs de Firebase Storage (campo photos en Firestore)
+        if(!p.photos) p.photos=[];
         products.push(p);
       });
-      localStorage.setItem('mto_products',JSON.stringify(products));
       if(typeof renderApp==='function') renderApp();
       showSyncStatus(true,`✓ ${products.length} productos sincronizados`);
     },
@@ -326,18 +325,31 @@ window._fsStartListeners=function(){
 window._fsSave=async function(p){
   try{
     const data={...p};
-    if(data.photos&&data.photos.length) saveLocalPhotos(data.id,data.photos);
-    delete data.photos; // no guardar base64 en Firestore
-    // Asegura que basePrice existe
     if(!data.basePrice) data.basePrice=data.price;
+    // Las fotos son ahora URLs de Firebase Storage — se guardan en Firestore
+    if(!Array.isArray(data.photos)) data.photos=[];
     await setDoc(doc(_db,'mayorista_products',String(data.id)),data);
   }catch(e){ showSyncStatus(false,'Error al guardar: '+e.message); console.error(e); }
 };
 
 window._fsDelete=async function(id){
   try{
+    // Eliminar fotos de Storage antes de borrar el documento
+    for(let i=0;i<4;i++){
+      try{ await deleteObject(ref(_storage,`products/${id}/photo_${i}.jpg`)); }catch(e){}
+    }
     await deleteDoc(doc(_db,'mayorista_products',String(id)));
   }catch(e){ showSyncStatus(false,'Error al eliminar: '+e.message); console.error(e); }
+};
+
+// Sube una foto a Firebase Storage y devuelve la URL pública
+window._fsUploadPhoto=async function(productId, index, dataUri){
+  try{
+    const storageRef=ref(_storage,`products/${productId}/photo_${index}.jpg`);
+    await uploadString(storageRef, dataUri, 'data_url');
+    const url=await getDownloadURL(storageRef);
+    return url;
+  }catch(e){ showSyncStatus(false,'Error al subir foto: '+e.message); console.error(e); return null; }
 };
 
 // Guarda el markup % en Firestore settings
@@ -355,7 +367,7 @@ window._fsBakeMarkup=async function(pctVal, prods){
       const newBase=Math.round((p.basePrice||p.price)*(1+pctVal/100));
       const newOld=p.basePriceOld>0 ? Math.round(p.basePriceOld*(1+pctVal/100)) : (p.priceOld>0 ? Math.round(p.priceOld*(1+pctVal/100)) : 0);
       const updated={...p, price:newBase, basePrice:newBase, priceOld:newOld||0, basePriceOld:newOld||0};
-      delete updated.photos;
+      if(!Array.isArray(updated.photos)) updated.photos=[];
       if(!updated.basePrice) updated.basePrice=updated.price;
       batch.push(setDoc(doc(_db,'mayorista_products',String(updated.id)),updated));
     }
@@ -1008,7 +1020,7 @@ function openProductModal(id){
   setTimeout(()=>document.getElementById('pf-name')?.focus(),50);
 }
 
-function saveProduct(id){
+async function saveProduct(id){
   const name=document.getElementById('pf-name').value.trim();
   if(!name){ alert('Ingresá el nombre del producto.'); return; }
   const cat=document.getElementById('pf-cat').value;
@@ -1018,18 +1030,39 @@ function saveProduct(id){
   const stock=parseInt(document.getElementById('pf-stock').value)||0;
   const featured=document.getElementById('pf-featured').checked;
   const desc=(document.getElementById('pf-desc')?.value||'').trim();
-  const photos=(window._pfPhotos||[]).filter(Boolean);
-  // basePrice = precio base intocable; price = alias para compatibilidad
+  const rawPhotos=(window._pfPhotos||[]);
+
+  // Determinar el ID del producto antes de subir fotos
+  const productId=id||(Math.max(0,...products.map(p=>p.id))+1);
+
+  // Mostrar estado de carga
+  const saveBtn=document.querySelector('#modal-actions .btn-block');
+  if(saveBtn){ saveBtn.textContent='Subiendo fotos...'; saveBtn.disabled=true; }
+
+  // Subir fotos base64 a Firebase Storage; mantener URLs existentes tal cual
+  const photos=[];
+  for(let i=0;i<rawPhotos.length;i++){
+    const ph=rawPhotos[i];
+    if(!ph) continue;
+    if(typeof ph==='string' && ph.startsWith('https://')){
+      photos.push(ph); // ya es URL de Storage
+    } else if(typeof ph==='string' && ph.startsWith('data:')){
+      const url=window._fsUploadPhoto ? await window._fsUploadPhoto(productId,i,ph) : null;
+      if(url) photos.push(url);
+    }
+  }
+
+  if(saveBtn){ saveBtn.textContent='Guardar'; saveBtn.disabled=false; }
+
+  // basePrice = precio base intocable
   if(id){
     const p=products.find(x=>x.id===id);
     if(p) Object.assign(p,{name,cat,code,price,basePrice:price,priceOld,basePriceOld:priceOld,stock,featured,desc,photos});
   } else {
-    const newId=Math.max(0,...products.map(p=>p.id))+1;
     const slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,60);
-    products.push({id:newId,slug,name,cat,code,price,basePrice:price,priceOld,basePriceOld:priceOld,stock,featured,desc,photos});
+    products.push({id:productId,slug,name,cat,code,price,basePrice:price,priceOld,basePriceOld:priceOld,stock,featured,desc,photos});
   }
   window._pfPhotos=undefined;
-  localStorage.setItem('mto_products', JSON.stringify(products));
   const savedP=id?products.find(x=>x.id===id):products[products.length-1];
   if(window._fsSave && savedP) window._fsSave(savedP);
   closeModal(); renderApp(); showToast('Producto guardado','success');
